@@ -1,0 +1,39 @@
+# ========== Keil MDK-ARM 构建产物 ==========
+**/MDK-ARM/Objects/
+**/MDK-ARM/Listings/
+**/MDK-ARM/DebugConfig/
+**/MDK-ARM/RTE/
+
+# ========== Keil 用户级 / 本地配置（不提交） ==========
+*.uvoptx
+*.uvguix.*
+*.scvd
+*.bak
+*.orig
+
+# ========== 编译中间产物兜底 ==========
+*.axf
+*.bin
+*.build
+*.crf
+*.d
+*.dep
+*.elf
+*.hex
+*.htm
+*.lnp
+*.lst
+*.map
+*.o
+*.srec
+*.tmp
+
+# ========== Windows ==========
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# ========== IDE ==========
+.vscode/
+.idea/
