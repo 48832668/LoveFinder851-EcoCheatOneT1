@@ -38,6 +38,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "tim.h"
+#include "crc.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -107,6 +108,7 @@ int main(void)
   Studio_SPI1_Init();
   Studio_USART1_Init();
   Studio_TIM3_Init();
+  Studio_CRC_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
