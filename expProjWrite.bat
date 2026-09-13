@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title 例程烧录助手
 setlocal enabledelayedexpansion
@@ -68,7 +68,7 @@ for /d %%D in ("%SCRIPT_DIR%examples\*") do (
     set "PROJ_DIR[!idx!]=%%D"
     set "PROJ_UVPROJX[!idx!]=%%F"
     set "PROJ_NAME[!idx!]=%%~nF"
-    set "PROJ_DISP[!idx!]=%%~nxD (%%~nF)"
+    set "PROJ_DISP[!idx!]=%%~nxD"
   )
 )
 
@@ -85,7 +85,6 @@ echo ========================================
 echo         例程烧录助手
 echo ========================================
 echo.
-
 for /l %%I in (1,1,%TOTAL%) do (
   echo   [%%I] !PROJ_DISP[%%I]!
 )
@@ -93,7 +92,6 @@ echo.
 echo   [R] 刷新列表
 echo   [Q] 退出
 echo.
-
 set "choice="
 set /p "choice=请选择例程序号: "
 
@@ -137,7 +135,7 @@ echo.
 echo [1/3] 正在编译 ...
 "%UV4_EXE%" -b "!SEL_UVPROJX!" -o "!BUILD_LOG!" -j0
 set "BUILD_EXIT=%ERRORLEVEL%"
-type "!BUILD_LOG!" | findstr /i /c:"error" /c:"warning" /c:"0 Error" /c:"0 Warning"
+if exist "!BUILD_LOG!" type "!BUILD_LOG!"
 
 if %BUILD_EXIT%==0 (
   echo [OK] 编译成功（无错误）。
