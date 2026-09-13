@@ -21,7 +21,13 @@
  * 双缓冲（乒乓）行缓冲：每行 ST7735_WIDTH*2 字节
  *===========================================================================*/
 static uint8_t s_fbuf[2][ST7735_WIDTH * 2];
-static volatile uint8_t s_dmaDone = 1;   /* 1 = DMA 空闲 */
+
+/* 1 = 使用 DMA 传输；DMA 不可用时自动置 0，永久退化为阻塞 SPI。
+ * 这样即使某颗芯片 DMA 通道/映射异常，动画也一定能正常播放。 */
+static uint8_t s_useDma = 1u;
+
+/* DMA 单次传输超时（ms）：超过即判定 DMA 不可用 */
+#define ST7735_DMA_TIMEOUT_MS   50u
 
 /* 整数平方根（位运算法，避免引入 math.h / 浮点库） */
 static int16_t ST7735_ISqrt(uint32_t n)
@@ -71,28 +77,84 @@ static void ST7735_WriteDataBuf(const uint8_t *buf, uint16_t len)
     HAL_SPI_Transmit(&hspi1, (uint8_t *)buf, len, HAL_MAX_DELAY);
 }
 
-/*--- DMA 传输 ------------------------------------------------------------
- * 启动一次 SPI1 TX DMA（非阻塞）。完成时会进入 HAL_SPI_TxCpltCallback
- * （本文件末尾覆写了该弱回调），从而清除 s_dmaDone。
+/*--- DMA 传输（轮询式，不依赖中断） ---------------------------------------
+ * 直接操作 DMA1_Channel3 寄存器驱动 SPI1_TX：
+ *   - 通过轮询通道 3 的传输完成标志（TCIF3）判断完成，带超时；
+ *   - 不依赖 NVIC 中断，避免中断配置/向量问题导致死等；
+ *   - 超时后自动关闭通道并返回失败，调用方退化为阻塞 SPI。
  *-----------------------------------------------------------------------*/
-static void ST7735_DMA_Start(const uint8_t *buf, uint16_t len)
+static uint8_t ST7735_DMA_Start(const uint8_t *buf, uint16_t len)
 {
-    HAL_GPIO_WritePin(LCD_DC_Port, LCD_DC_Pin, GPIO_PIN_SET); /* data mode */
-    s_dmaDone = 0;
-    if (HAL_SPI_Transmit_DMA(&hspi1, (uint8_t *)buf, len) != HAL_OK)
+    DMA_Channel_TypeDef *ch = hdma_spi1_tx.Instance;   /* DMA1_Channel3 */
+
+    if (len == 0u) return 1u;
+
+    /* 清通道 3 全部标志，避免残留 TCIF 造成假完成 */
+    DMA1->IFCR = DMA_IFCR_CGIF3;
+
+    ch->CPAR  = (uint32_t)&(SPI1->DR);
+    ch->CMAR  = (uint32_t)buf;
+    ch->CNDTR = len;
+    /* 内存递增 / 外设固定 / 字节宽度 / 内存->外设 / 普通模式 / 最高优先级 */
+    ch->CCR   = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_EN;
+
+    if ((SPI1->CR1 & SPI_CR1_SPE) == 0u)
     {
-        /* DMA 启动失败时退化为阻塞发送，避免死等 */
-        s_dmaDone = 1;
-        HAL_SPI_Transmit(&hspi1, (uint8_t *)buf, len, HAL_MAX_DELAY);
+        SET_BIT(SPI1->CR1, SPI_CR1_SPE);
     }
+    SET_BIT(SPI1->CR2, SPI_CR2_TXDMAEN);   /* SPI 产生 TX DMA 请求 */
+    return 1u;
 }
 
-static void ST7735_DMA_Wait(void)
+/* 轮询等待一次 DMA 传输完成；返回 1=成功, 0=超时 */
+static uint8_t ST7735_DMA_Wait(void)
 {
-    while (s_dmaDone == 0)
+    DMA_Channel_TypeDef *ch = hdma_spi1_tx.Instance;
+    uint32_t t0 = HAL_GetTick();
+
+    while ((DMA1->ISR & DMA_ISR_TCIF3) == 0u)
     {
+        if ((HAL_GetTick() - t0) > ST7735_DMA_TIMEOUT_MS)
+        {
+            /* 超时：关通道与 TX DMA 请求，返回失败 */
+            CLEAR_BIT(ch->CCR, DMA_CCR_EN);
+            CLEAR_BIT(SPI1->CR2, SPI_CR2_TXDMAEN);
+            DMA1->IFCR = DMA_IFCR_CGIF3;
+            return 0u;
+        }
     }
+
+    /* 传输完成：清标志、关通道、等待 SPI 移出最后一位 */
+    DMA1->IFCR = DMA_IFCR_CTCIF3;
+    CLEAR_BIT(ch->CCR, DMA_CCR_EN);
+    CLEAR_BIT(SPI1->CR2, SPI_CR2_TXDMAEN);
+
+    t0 = HAL_GetTick();
+    while ((SPI1->SR & SPI_SR_BSY) != 0u)
+    {
+        if ((HAL_GetTick() - t0) > ST7735_DMA_TIMEOUT_MS) break;
+    }
+    return 1u;
 }
+
+/* 统一的像素数据发送：优先 DMA；DMA 不可用则永久退化为阻塞 SPI */
+static void ST7735_SendData(const uint8_t *buf, uint16_t len)
+{
+    HAL_GPIO_WritePin(LCD_DC_Port, LCD_DC_Pin, GPIO_PIN_SET); /* data mode */
+
+    if (s_useDma && ST7735_DMA_Start(buf, len))
+    {
+        if (ST7735_DMA_Wait())
+        {
+            return;
+        }
+        s_useDma = 0u;   /* 该芯片 DMA 不可用，以后全部走阻塞 */
+    }
+    HAL_SPI_Transmit(&hspi1, (uint8_t *)buf, len, HAL_MAX_DELAY);
+}
+
+/* 前向声明：ST7735_Init() 末尾调用自检 */
+static void ST7735_DMA_SelfTest(void);
 
 static void ST7735_Reset(void)
 {
@@ -197,6 +259,10 @@ void ST7735_Init(void)
 #endif
 
     ST7735_Deselect();
+
+    /* DMA 自检：在 CS 未选中（面板忽略数据）时试发 4 字节，
+     * 判断 SPI1_TX DMA 是否可用；不可用则永久退化为阻塞 SPI */
+    ST7735_DMA_SelfTest();
 }
 
 void ST7735_SetBacklight(uint8_t on)
@@ -509,8 +575,7 @@ void ST7735_FillRect_DMA(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_
     ST7735_SetAddrWindow(x, y, (uint16_t)(x + w - 1), (uint16_t)(y + h - 1));
     for (r = 0; r < h; r++)
     {
-        ST7735_DMA_Start(s_fbuf[0], rowBytes);
-        ST7735_DMA_Wait();
+        ST7735_SendData(s_fbuf[0], rowBytes);
     }
     ST7735_Deselect();
 }
@@ -539,18 +604,14 @@ void ST7735_Blit565_DMA(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const ui
             s_fbuf[0][i * 2]     = (uint8_t)(src[i] >> 8);
             s_fbuf[0][i * 2 + 1] = (uint8_t)(src[i] & 0xFF);
         }
-        ST7735_DMA_Start(s_fbuf[0], (uint16_t)(w * 2));
-        ST7735_DMA_Wait();
+        ST7735_SendData(s_fbuf[0], (uint16_t)(w * 2));
     }
     ST7735_Deselect();
 }
 
-/* 双缓冲 DMA 全屏渲染：乒乓缓冲让计算与传输重叠 */
+/* 全屏渲染：DMA 双缓冲（乒乓） / 退化阻塞两种路径 */
 void ST7735_DrawFrame(ST7735_RowRenderFn fn)
 {
-    uint8_t *cur = s_fbuf[0];
-    uint8_t *nxt = s_fbuf[1];
-    uint8_t *tmp;
     uint16_t y;
 
     if (fn == NULL) return;
@@ -558,37 +619,82 @@ void ST7735_DrawFrame(ST7735_RowRenderFn fn)
     ST7735_Select();
     ST7735_SetAddrWindow(0, 0, ST7735_WIDTH - 1, ST7735_HEIGHT - 1);
 
-    /* 第 0 行先渲染并启动 DMA */
-    fn(0, cur, ST7735_WIDTH);
-    ST7735_DMA_Start(cur, (uint16_t)(ST7735_WIDTH * 2));
-
-    for (y = 1; y < ST7735_HEIGHT; y++)
+    if (s_useDma)
     {
-        /* CPU 渲染下一行（与上一行的 DMA 传输并行） */
-        fn(y, nxt, ST7735_WIDTH);
-        ST7735_DMA_Wait();
-        tmp = cur; cur = nxt; nxt = tmp;   /* 交换缓冲 */
-        ST7735_DMA_Start(cur, (uint16_t)(ST7735_WIDTH * 2));
+        /* -- DMA 乒乓：计算行 N+1 与发送行 N 重叠 -- */
+        uint8_t *cur = s_fbuf[0];
+        uint8_t *nxt = s_fbuf[1];
+        uint8_t *tmp;
+        uint8_t ok = 1u;
+        uint16_t unit = (uint16_t)(ST7735_WIDTH * 2);
+
+        HAL_GPIO_WritePin(LCD_DC_Port, LCD_DC_Pin, GPIO_PIN_SET);
+        fn(0u, cur, ST7735_WIDTH);
+        ST7735_DMA_Start(cur, unit);
+
+        for (y = 1u; y < ST7735_HEIGHT; y++)
+        {
+            fn(y, nxt, ST7735_WIDTH);          /* CPU 渲染下一行 */
+            if (!ST7735_DMA_Wait()) { ok = 0u; break; }
+            tmp = cur; cur = nxt; nxt = tmp;
+            ST7735_DMA_Start(cur, unit);
+        }
+        if (ok && !ST7735_DMA_Wait()) ok = 0u;
+
+        if (!ok)
+        {
+            /* DMA 中途超时：永久切换为阻塞，并重设地址窗口后整帧重绘 */
+            s_useDma = 0u;
+            ST7735_SetAddrWindow(0, 0, ST7735_WIDTH - 1, ST7735_HEIGHT - 1);
+            for (y = 0u; y < ST7735_HEIGHT; y++)
+            {
+                fn(y, s_fbuf[0], ST7735_WIDTH);
+                ST7735_WriteDataBuf(s_fbuf[0], unit);
+            }
+        }
     }
-    ST7735_DMA_Wait();
+    else
+    {
+        /* -- 阻塞 SPI 逐行发送（退化模式） -- */
+        uint16_t unit = (uint16_t)(ST7735_WIDTH * 2);
+        for (y = 0u; y < ST7735_HEIGHT; y++)
+        {
+            fn(y, s_fbuf[0], ST7735_WIDTH);
+            ST7735_WriteDataBuf(s_fbuf[0], unit);
+        }
+    }
+
     ST7735_Deselect();
 }
 
 /*===========================================================================
- * HAL 回调覆写：DMA 完成 / 出错时清除忙标志
+ * DMA 自检
+ *
+ * 在 CS 未选中（面板忽略数据）时试发 4 个字节：
+ *   - TC 标志按预期置位 → DMA 可用，全速运行；
+ *   - 超时             → DMA 不可用，永久退化为阻塞 SPI。
+ * 这样无论芯片 DMA 映射是否与预期一致，动画都保证能播放。
  *===========================================================================*/
-void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+static void ST7735_DMA_SelfTest(void)
 {
-    if (hspi->Instance == SPI1)
+    static const uint8_t dummy[4] = { 0x00u, 0x00u, 0x00u, 0x00u };
+
+    s_useDma = 1u;
+    if (ST7735_DMA_Start(dummy, 4u))
     {
-        s_dmaDone = 1;
+        if (!ST7735_DMA_Wait())
+        {
+            s_useDma = 0u;   /* 超时：DMA 不可用 */
+        }
+    }
+    else
+    {
+        s_useDma = 0u;
     }
 }
 
-void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+/* 返回 1 = 当前使用 DMA 传输；0 = 已退化为阻塞 SPI */
+uint8_t ST7735_IsDmaActive(void)
 {
-    if (hspi->Instance == SPI1)
-    {
-        s_dmaDone = 1;
-    }
+    return s_useDma;
 }

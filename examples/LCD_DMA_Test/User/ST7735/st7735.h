@@ -86,4 +86,7 @@ void ST7735_Blit565_DMA(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const ui
 typedef void (*ST7735_RowRenderFn)(uint16_t y, uint8_t *dst, uint16_t w);
 void ST7735_DrawFrame(ST7735_RowRenderFn fn);
 
+/** 返回 1 = 当前使用 DMA 传输；0 = DMA 不可用，已退化为阻塞 SPI */
+uint8_t ST7735_IsDmaActive(void);
+
 #endif /* ST7735_H */

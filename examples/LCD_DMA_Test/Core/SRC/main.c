@@ -180,7 +180,10 @@ static void ShowSplash(void)
                       "PY32F003", ST7735_WHITE, ST7735_NAVY);
     ST7735_DrawString(14, 38, "LCD DMA DEMO", ST7735_YELLOW, ST7735_NAVY);
     ST7735_DrawString(14, 50, "160x80 ST7735", ST7735_GREEN, ST7735_NAVY);
-    ST7735_DrawString(14, 62, "SPI1 TX->DMA1_CH3", ST7735_MAGENTA, ST7735_NAVY);
+    if (ST7735_IsDmaActive())
+        ST7735_DrawString(14, 62, "TX: DMA1_CH3 (ACTIVE)", ST7735_GREEN, ST7735_NAVY);
+    else
+        ST7735_DrawString(14, 62, "TX: SPI (BLOCKING)", ST7735_RED, ST7735_NAVY);
 
     while (HAL_GetTick() - t0 < 2500u)
     {
