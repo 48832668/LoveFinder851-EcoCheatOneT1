@@ -113,8 +113,9 @@ int main(void)
   /* ST7735 LCD test: show two lines on power-up */
   ST7735_Init();
   ST7735_FillScreen(ST7735_BLACK);
-  ST7735_DrawString(40, 18, "Hello", ST7735_WHITE, ST7735_BLACK);
-  ST7735_DrawString(8, 34, "EcoCheatOneT1", ST7735_CYAN, ST7735_BLACK);
+  ST7735_DrawString(40, 12, "exp1_LCD_Test", ST7735_WHITE, ST7735_BLACK);
+  ST7735_DrawString(40, 32, "EcoCheatOneT1", ST7735_CYAN, ST7735_BLACK);
+  ST7735_DrawString(40, 52, "HelloWorld!", ST7735_RED, ST7735_BLACK);
   /* USER CODE END 2 */
 
   /* Infinite loop */
