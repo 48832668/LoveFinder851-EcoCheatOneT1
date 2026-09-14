@@ -163,18 +163,43 @@ while ($true) {
 
     # ---------- 2/3 烧录 ----------
     Write-Host ""
-    Write-Host "[2/3] 烧录" -ForegroundColor Cyan
-    Write-Host "      说明：本芯片 PY32F003 无法用命令行自动烧录 ——" -ForegroundColor Yellow
-    Write-Host "        · OpenOCD 0.12 无 PY32 flash 驱动（会报 Cannot identify target as a stm32x）" -ForegroundColor DarkGray
-    Write-Host "        · Keil UV4 -f 批处理模式其 CMSIS-AGDI 无法连接 DAPLink" -ForegroundColor DarkGray
-    Write-Host "      请在 Keil 中点击 Download（下载）按钮完成烧录：" -ForegroundColor Yellow
-    Write-Host ("        工程: " + $sel.Uvprojx) -ForegroundColor White
-    if (Test-Path $sel.Hex) {
-        Write-Host ("        HEX : " + $sel.Hex) -ForegroundColor DarkGray
+    Write-Host "[2/3] 正在烧录（Keil UV4 -f，PY061xx_64.FLM 算法）..." -ForegroundColor Cyan
+
+    $flashLog = Join-Path $env:TEMP ($sel.Name + "_flash.log")
+    Remove-Item -LiteralPath $flashLog -ErrorAction SilentlyContinue
+    & $Uv4 -f $sel.Uvprojx -o $flashLog -j0 | Out-Null
+    $flashExit = $LASTEXITCODE
+
+    $flashText = ''
+    if (Test-Path $flashLog) {
+        $flashText = Get-Content -LiteralPath $flashLog -Raw -Encoding UTF8
+        $flashText.TrimEnd() -split "`r?`n" | ForEach-Object {
+            Write-Host "      $_" -ForegroundColor DarkGray
+        }
     }
-    Write-Host ""
-    $ans = Read-Host "      烧录完成后按回车继续（输入 S 跳过复位直接返回）"
-    if ($ans -ieq 'S') { continue }
+
+    # 注意：UV4 烧录失败时退出码仍可能是 0，必须以日志内容为准
+    $flashOk = ($flashExit -eq 0) -and
+               ($flashText -notmatch 'Flash Download failed') -and
+               ($flashText -notmatch 'Internal DLL Error')
+
+    if ($flashOk) {
+        Write-Host "      [OK] 烧录完成。" -ForegroundColor Green
+    } else {
+        Write-Host "      [注意] 命令行烧录未成功，请改用 Keil 的 Download 按钮。" -ForegroundColor Yellow
+        Write-Host "      原因：PY32F003 的 flash 算法依赖 Keil 图形界面的调试器：" -ForegroundColor DarkGray
+        Write-Host "        · OpenOCD 0.12 无 PY32 flash 驱动（Cannot identify target as a stm32x）" -ForegroundColor DarkGray
+        Write-Host "        · UV4 -f 在无交互桌面时 CMSIS-AGDI 无法初始化（Target DLL cancelled）" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "      请在 Keil 中打开工程后点击 Download 按钮：" -ForegroundColor Yellow
+        Write-Host ("        工程: " + $sel.Uvprojx) -ForegroundColor White
+        if (Test-Path $sel.Hex) {
+            Write-Host ("        HEX : " + $sel.Hex) -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        $ans = Read-Host "      烧录完成后按回车继续复位（输入 S 跳过复位直接返回）"
+        if ($ans -ieq 'S') { continue }
+    }
 
     # ---------- 3/3 复位 ----------
     Invoke-Reset
