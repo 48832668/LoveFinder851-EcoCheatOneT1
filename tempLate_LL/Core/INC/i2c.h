@@ -39,7 +39,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "main.hpp"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */

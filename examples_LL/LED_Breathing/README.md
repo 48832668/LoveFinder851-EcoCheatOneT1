@@ -116,9 +116,11 @@ LED_Breathing/
 ├── MDK-ARM/
 │   ├── LED_Breathing.uvprojx
 │   └── startup_py32f003xx.s
-├── LED_Breathing.pysprj   # PyStudio 工程（RCC/GPIO/NVIC/TIM3 firmware = ll）
 └── README.md
 ```
+
+> 例程目录不带 `.pysprj`：例程是手工维护的 Keil 工程，只有 `tempLate_LL/` 母版
+> 保留 PyStudio 工程文件（本工程的外设配置为 RCC/GPIO/NVIC/TIM3 = **ll**）。
 
 ## 引脚（与 HAL 版一致）
 

@@ -401,11 +401,6 @@
               <FilePath>../Core/SRC/main.cpp</FilePath>
             </File>
             <File>
-              <FileName>main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Core/SRC/main.c</FilePath>
-            </File>
-            <File>
               <FileName>gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/SRC/gpio.c</FilePath>

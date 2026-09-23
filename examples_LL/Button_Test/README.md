@@ -68,7 +68,7 @@ CHG:  0%   2x:LP+
   其余是 `"Button_Test"` / `"CLICK :"` / `"LP:...ms DC:...ms"` 这些字面量。
 - **ZI +604**：`startup_py32f003xx.s` 的栈保留了模板的 **0x400（1 KB）**，
   而 `LCD_Test` 用的是 0x200（0.5 KB）。本工程多一层 `ui_write_field()` 调用，
-  栈留宽一点更稳；`.pysprj` 的 `minheap = 0x100` 已同步。
+  栈留宽一点更稳。
   （HEAP 段无人引用，被链接器直接丢弃，不占 RAM。）
 
 ```
@@ -98,9 +98,11 @@ Button_Test/
 ├── MDK-ARM/
 │   ├── Button_Test.uvprojx
 │   └── startup_py32f003xx.s
-├── Button_Test.pysprj
 └── README.md
 ```
+
+> 例程目录里**不带 `.pysprj`** —— 例程是手工维护的 Keil 工程，
+> 只有 `tempLate_LL/` 母版保留 PyStudio 工程文件。见下文「关于工程名」。
 
 工程 include path（见 `MDK-ARM/Button_Test.uvprojx`）：
 
@@ -244,9 +246,44 @@ while (1)
 | 堆 | 0x400 | 0x100 | 0x100 |
 | 外设集 | GPIO/I2C1/SPI1/USART1/TIM3/CRC | 同左 | 同左 |
 
-> 例程目录里 `Drivers/` 用的是 `PY32F003_LL_Driver`（纯 LL），
-> 而 `tempLate_LL` 里那份是 `PY32F003_HAL_Driver`（HAL + LL 混装，历史遗留）。
-> 本工程与其它例程保持一致，用前者。
+### 关于 `Drivers/` 的目录名（不是 HAL/LL 混用）
+
+**所有工程（模板 + 例程）的编译配置都是纯 LL**，实测：
+
+- `<Define>PY32F003x8,USE_FULL_LL_DRIVER</Define>`
+- Keil 文件组里只有 `py32f0xx_ll_*.c`，**HAL 源一个都没参与编译**（0 个）
+
+目录名的差异只是「厂商驱动包放了哪一份」：
+
+| 目录 | 内容 | 出现在 |
+|------|------|--------|
+| `PY32F003_HAL_Driver/` | Puya 导出包的**原样**目录 —— 名字叫 HAL，但 `Inc/` `Src/` 里 HAL 与 LL 两套源码都在（28 个 `hal.h` + 22 个 `ll.h`） | `tempLate_LL`、`LCD_DMA_Test`（历史遗留） |
+| `PY32F003_LL_Driver/` | 裁剪过的**纯 LL 副本**（22 个 `ll.h` / 16 个 `ll.c`，0 个 HAL 文件） | `LCD_Test`、`LED_Breathing`、**本工程** |
+
+> 所以「`PY32F003_HAL_Driver` 目录里有 HAL 文件」只是厂商包的组织方式，
+> **不代表工程在用 HAL**。本工程沿用例程那份纯 LL 副本，只是目录更干净、体积更小。
+
+### 关于工程名
+
+例程目录**不带 `.pysprj`** —— 只有 `tempLate_LL/` 母版保留 PyStudio 工程文件。
+所以本工程是**纯手工维护的 Keil 工程**，工程名直接写在 `uvprojx` 里：
+
+```xml
+<TargetName>Button_Test</TargetName>
+<OutputName>Button_Test</OutputName>
+```
+
+> 母版的 `.pysprj` 里 `"name"` 是 `EmptyProj_LL`（PyStudio 界面上改不了），
+> 所以母版的 Keil 工程一直叫 `EmptyProj_LL.uvprojx` —— 例程要自己的名字，
+> 把 `uvprojx` 里上面两处改掉、文件也改名即可（本工程就是这么来的）。
+
+> `tools/expProjWrite.ps1` 的菜单**用的是目录名**（`$projDir.Name`），
+> 不依赖 `.uvprojx` 的文件名 —— 工程文件叫什么都能被扫到。
+
+> ⚠️ 如果哪天把本工程重新导入 PyStudio 并导出，会**再生成一份 C 版
+> `main.c`/`main.h`**，和 `main.cpp`/`main.hpp` 冲突（两个 `main()`），
+> 并把外设头的 `#include "main.hpp"` 改写成 `"main.h"`。导出后请照
+> `tempLate_LL/README.md` §2 的 6 条清单逐条补回。
 
 ## 踩的坑
 

@@ -51,19 +51,38 @@ extern volatile uint32_t uwTick;
 
 ---
 
-## 2. 两处补丁（均在 `USER CODE` 保护区内）
+## 2. PyStudio 重新生成后必须手工补回的 6 处
 
-| # | 文件 / 区段 | 补丁 | 原因 |
+前 3 处是**补丁**（都在 `USER CODE` 保护区内），后 3 处是**清理 PyStudio 生成的
+C 版 main 残留**（本模板的设计是「只有 `main` 是 C++」，见 §1）。
+
+| # | 文件 / 区段 | 要做的 | 原因 |
 |---|---|---|---|
-| 1 | `Core/SRC/rcc.c` `Studio_RCC_Init 1` | `NVIC_SetPriority(SysTick_IRQn, (1UL<<__NVIC_PRIO_BITS)-1UL)` + `SysTick->CTRL \|= SysTick_CTRL_TICKINT_Msk` | Puya 的 `LL_InitTick()` 漏置位 TICKINT（ST 原版有）；不补则 SysTick 中断不开、`uwTick`/`BSP_GetTick()` 恒为 0 |
-| 2 | `Core/SRC/spi.c` `Studio_SPI1_Init 1` | `LL_DMA_SetPeriphAddress(DMA1, CH1, (uint32_t)&SPI1->DR)` + `LL_SPI_EnableDMAReq_TX(SPI1)` + `LL_SPI_Enable(SPI1)` | PyStudio 的 SPI/DMA 模板永不生成这 3 行；漏 CPAR 会总线挂死 |
-| 3 | `Core/SRC/py32f003_it.c` `SysTick_Handler 0` | `uwTick++` | `LL_mDelay()` 不维护毫秒计数器 |
+| 1 | `Core/SRC/rcc.c` `Studio_RCC_Init 1` | 补 `NVIC_SetPriority(SysTick_IRQn, (1UL<<__NVIC_PRIO_BITS)-1UL)` + `SysTick->CTRL \|= SysTick_CTRL_TICKINT_Msk` | Puya 的 `LL_InitTick()` 漏置位 TICKINT（ST 原版有）；不补则 SysTick 中断不开、`uwTick`/`BSP_GetTick()` 恒为 0 |
+| 2 | `Core/SRC/spi.c` `Studio_SPI1_Init 1` | 补 `LL_DMA_SetPeriphAddress(DMA1, CH1, (uint32_t)&SPI1->DR)` + `LL_SPI_EnableDMAReq_TX(SPI1)` + `LL_SPI_Enable(SPI1)` | PyStudio 的 SPI/DMA 模板永不生成这 3 行；漏 CPAR 会总线挂死 |
+| 3 | `Core/SRC/py32f003_it.c` `SysTick_Handler 0` | 补 `uwTick++` | `LL_mDelay()` 不维护毫秒计数器 |
+| 4 | `Core/SRC/main.c`、`Core/INC/main.h` | **删除**（PyStudio 每次都会重新生成） | 与本模板的 `main.cpp`/`main.hpp` 重复：两个 `int main(void)` + 两个 `Error_Handler()`，链接必冲突 |
+| 5 | `Core/INC/{crc,dma,gpio,i2c,py32f003_it,rcc,spi,tim,usart}.h` | 把 `#include "main.h"` **改回** `#include "main.hpp"` | PyStudio 生成的 `main.h` 里没有 `uwTick`/`BSP_GetTick` 声明，C 文件（尤其 `py32f003_it.c` 的 `uwTick++`）会 `use of undeclared identifier 'uwTick'` 编译失败 |
+| 6 | `MDK-ARM/EmptyProj_LL.uvprojx` | 删掉 `Application/User/Core` 组里的 `main.c` 条目 | PyStudio 会把 `main.c` 加进编译列表，即使文件删了也会报找不到源文件 |
 
 > ⚠️ **PyStudio 不保留任何用户代码**。已在 `%APPDATA%\py32studio\data\vendor\Puya\chip-template\`
 > 的 `generator\keil.js`、`core\run\v2.cjs` 及整个模板树核实：搜 `preserve` /
 > `mergeUserCode` / JS 里的 `USER CODE BEGIN` **全部 0 命中** —— `USER CODE BEGIN`
-> 只是 `.hbs` 里的字面文本。**重新生成后这三处补丁会消失，必须手工补回。**
+> 只是 `.hbs` 里的字面文本。**重新生成后上面这些都会消失，必须手工补回。**
 > 同理 `keil.js` 写死 `uAC6:"0"`、`v6LangP:"1"`、`MiscControls:""`，**默认吐 AC5**。
+
+> 📌 **重新导出后的自检**：`Keil` 里 clean rebuild 一次，应当得到
+> `Code=3508 RO-data=352 RW-data=196 ZI-data=1036`、`0 Error(s), 0 Warning(s)`（见 §4）。
+> 数字对不上或报错，就按上表逐条核对。
+
+> 📌 **工程名改不了**：PyStudio 用 `.pysprj` 里的 `"name"` 字段当工程名，
+> 界面上改不了 —— 所以本模板的 `tempLate_LL.pysprj` 里是 `"name": "EmptyProj_LL"`，
+> Keil 工程也就一直叫 `EmptyProj_LL.uvprojx`（目录名却是 `tempLate_LL`，见文首说明）。
+>
+> **例程不再带 `.pysprj`**（`examples_LL/*` 已全部删除）：例程是手工维护的 Keil 工程，
+> 工程名直接改 `uvprojx` 的 `<TargetName>` / `<OutputName>` 两处，再把文件改名即可
+> （`LCD_Test` / `Button_Test` 就是这么来的）。只有本母版保留 PyStudio 工程文件，
+> 供新建工程时复制。
 
 ---
 
