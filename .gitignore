@@ -34,6 +34,10 @@ Desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
 
+# ========== 历史备份 / 重构工作区（不提交） ==========
+old/
+.bak-fontlib-refactor/
+
 # ========== IDE ==========
 .vscode/
 .idea/

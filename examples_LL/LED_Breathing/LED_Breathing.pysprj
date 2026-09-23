@@ -1,0 +1,171 @@
+{
+  "appVersion": "1.0.4",
+  "gitHash": "24e4898178df08ade33788b52084203dccaa516c",
+  "createTime": 1785605451139,
+  "lastTime": 1785605451139,
+  "version": 6,
+  "name": "LED_Breathing",
+  "platform": "MDK-ARM",
+  "vendor": "Puya",
+  "serial": "PY32F003",
+  "series": "PY32F003",
+  "chip": "PY32F003F18U6-E",
+  "firmversion": "V1.5.0",
+  "frameWork": "cortex-m0+",
+  "minstack": "0x200",
+  "minheap": "0x100",
+  "ramSize": "0x2000",
+  "flashSize": "0x10000",
+  "default_firmware_location": true,
+  "custom_firmware_location": "",
+  "library_copy": "all",
+  "data": {
+    "lastTime": 1788502335430,
+    "version": 6,
+    "gpioBindings": {
+      "version": 1,
+      "rows": [
+        {
+          "pinName": "PA14",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "SWCLK"
+          ],
+          "primarySignal": "SWCLK"
+        },
+        {
+          "pinName": "PA13",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "SWDIO"
+          ],
+          "primarySignal": "SWDIO"
+        },
+        {
+          "pinName": "PF2",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "NRST"
+          ],
+          "primarySignal": "NRST"
+        },
+        {
+          "pinName": "PA2",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "TIM3_CH1"
+          ],
+          "primarySignal": "TIM3_CH1"
+        },
+        {
+          "pinName": "PA1",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "GPIO_EXTI1"
+          ],
+          "primarySignal": "GPIO_EXTI1"
+        },
+        {
+          "pinName": "PB5",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "GPIO_EXTI5"
+          ],
+          "primarySignal": "GPIO_EXTI5"
+        },
+        {
+          "pinName": "PA0",
+          "locked": true,
+          "source": "manual",
+          "alternates": [
+            "GPIO_EXTI0"
+          ],
+          "primarySignal": "GPIO_EXTI0"
+        }
+      ]
+    },
+    "value": {
+      "PA14;SWCLK": {
+        "type": "pins-af",
+        "order": 1
+      },
+      "PA13;SWDIO": {
+        "type": "pins-af",
+        "order": 2
+      },
+      "PF2;NRST": {
+        "type": "pins-af",
+        "order": 3
+      },
+      "TIM3.Mode.Channel1.value": {
+        "type": "global-value",
+        "order": 4,
+        "value": "pwm_ch"
+      },
+      "TIM3.enable": {
+        "type": "global-enable",
+        "order": 5,
+        "value": true
+      },
+      "GPIO.TIM3.body.PA2.user_label.value": {
+        "type": "global-value",
+        "order": 6,
+        "value": "LED_PWM"
+      },
+      "PA1;GPIO_EXTI1": {
+        "type": "pins-af",
+        "order": 7
+      },
+      "GPIO.GPIO_EXTI.body.PA1.user_label.value": {
+        "type": "global-value",
+        "order": 8,
+        "value": "KEY_INT"
+      },
+      "PB5;GPIO_EXTI5": {
+        "type": "pins-af",
+        "order": 9
+      },
+      "GPIO.GPIO_EXTI.body.PB5.user_label.value": {
+        "type": "global-value",
+        "order": 10,
+        "value": "CLK_INT"
+      },
+      "PA0;GPIO_EXTI0": {
+        "type": "pins-af",
+        "order": 11
+      },
+      "GPIO.GPIO_EXTI.body.PA0.user_label.value": {
+        "type": "global-value",
+        "order": 12,
+        "value": "FUSB_INT"
+      },
+      "RCC.firmware.value": {
+        "type": "global-other",
+        "order": 100,
+        "value": "ll"
+      },
+      "GPIO.firmware.value": {
+        "type": "global-other",
+        "order": 101,
+        "value": "ll"
+      },
+      "NVIC.firmware.value": {
+        "type": "global-other",
+        "order": 102,
+        "value": "ll"
+      },
+      "TIM3.firmware.value": {
+        "type": "global-other",
+        "order": 103,
+        "value": "ll"
+      }
+    }
+  },
+  "templateVersion": 2
+}

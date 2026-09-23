@@ -1,4 +1,4 @@
-﻿<#
+<#
   例程烧录助手 (expProjWrite)
   ------------------------------------------------------------------
   为什么用 PowerShell 而不是纯 .bat：
@@ -58,16 +58,19 @@ $OcdScripts = Join-Path $OcdHome 'share\openocd\scripts'
 if (-not (Test-Path $OcdExe)) { Fail "找不到 openocd.exe：$OcdExe  （请检查 cfg\openocd.cfg）" }
 
 # ===================== 扫描例程 =====================
+# 目录结构：examples_LL\<例程名>\MDK-ARM\*.uvprojx
 function Get-Examples {
     $list = @()
-    $exRoot = Join-Path $ScriptDir 'examples'
+    $exRoot = Join-Path $ScriptDir 'examples_LL'
     if (-not (Test-Path $exRoot)) { return $list }
-    foreach ($dir in Get-ChildItem -LiteralPath $exRoot -Directory | Sort-Object Name) {
-        $mdk = Join-Path $dir.FullName 'MDK-ARM'
+
+    foreach ($projDir in Get-ChildItem -LiteralPath $exRoot -Directory | Sort-Object Name) {
+        $mdk = Join-Path $projDir.FullName 'MDK-ARM'
         if (-not (Test-Path $mdk)) { continue }
         foreach ($proj in Get-ChildItem -LiteralPath $mdk -Filter '*.uvprojx' -File) {
+            $label = $projDir.Name
             $list += [pscustomobject]@{
-                Name    = $dir.Name
+                Name    = $label
                 Uvprojx = $proj.FullName
                 MdkDir  = $mdk
                 Hex     = Join-Path $mdk ("Objects\" + $proj.BaseName + ".hex")
