@@ -1,6 +1,6 @@
 # LCD_DMA_Test（LL 库 + C++17 + SPI1_TX → DMA1_Channel1）
 
-ST7735 彩屏的 **DMA 加速**例程 —— `examples/HAL/LCD_DMA_Test` 的 LL/C++17 对应版本。
+ST7735 彩屏的 **DMA 加速**例程（LL 库 + C++17）。基础显示见同目录 `examples_LL/LCD_Test/`。
 
 - **主控**：PY32F003F18U6-E（Cortex-M0+，64 KB Flash / 8 KB RAM）
 - **屏幕**：ST7735 0.96" 160×80，SPI 接口
@@ -10,16 +10,16 @@ ST7735 彩屏的 **DMA 加速**例程 —— `examples/HAL/LCD_DMA_Test` 的 LL/
 
 ---
 
-## 1. 编译验证
+## 1. 编译验证（Keil MDK 5.43a / Arm Compiler 6.24，`-O1` + LTO，clean rebuild）
 
 ```
-Program Size: Code=12992 RO-data=2252 RW-data=208 ZI-data=1736
+Program Size: Code=11464 RO-data=2228 RW-data=216 ZI-data=3480
 0 Error(s), 0 Warning(s)
 ```
 
-| | Flash 合计 | RAM 合计 |
+| | Flash 合计 (Code+RO+RW) | RAM 合计 (RW+ZI) |
 |---|---|---|
-| 本工程 | 15452 B | 1944 B |
+| 本工程 | 13908 B | 3696 B |
 
 > ⚠️ 本工程比 HAL 版（12568 B）**大**，原因见 §5 —— 不是 LL 的问题，
 > 而是换用了功能完整得多的 C++ 屏驱库（完整图形原语 + 7×10 字库 + UTF-8）。
@@ -163,7 +163,10 @@ dma_wait();
 
 ## 5. 为什么比 HAL 版大？（重要）
 
-关掉 LTO 后逐模块统计（`Code` 字节）：
+> 下表是**上一版（未开 LTO）**的逐模块统计。当前工程开启 LTO 后全部合并进单个
+> `lto-llvm-*.o`，无法逐模块拆分；当前版本总体积以 §1 为准。
+
+逐模块统计（`Code` 字节）：
 
 | 模块 | 本工程(LL) | HAL 版 | 差异 |
 |---|---|---|---|
@@ -203,6 +206,6 @@ FILL/SHAPE/FLAG/SUMMARY、小结与汇总表的全部字符）。
 
 ## 7. 相关文档
 
-- `LL_LCD_DMA_研究.md` —— LL DMA 迁移的完整研究报告（API 核查、通道映射依据、风险清单）
-- `LL_vs_HAL_对比.md` —— LL 与 HAL 的整体量化对比
+- `examples_LL/LCD_Test/README.md` —— 基础显示例程（同一套屏驱与字库）
 - `LoveFinderLibForPY32_LL/README.md` —— 库的架构说明与移植点
+- `tempLate_LL/` —— 新建工程的 LL 空工程母版（仅 `main` + 自定义库为 C++）

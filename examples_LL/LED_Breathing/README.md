@@ -2,8 +2,8 @@
 
 PY32F003 板载 LED 呼吸灯示例（**LL 库 + C++17**）：上电后 PA2 上的 LED 按正弦曲线平滑呼吸。
 
-> 本工程是 `examples/LL/` 下第一个完成 **C++17 改造**的工程。
-> HAL 版对照在 `examples/HAL/LED_Breathing/`。
+> 本工程是 `examples_LL/` 下第一个完成 **C++17 改造**的工程。
+> 本仓库只保留 LL 版；HAL 对照工程不在本仓库内。
 
 ## C++17 改造说明
 
@@ -133,8 +133,8 @@ LED_Breathing/
 ## 使用
 
 1. 用 Keil MDK 打开 `MDK-ARM/LED_Breathing.uvprojx`，编译并下载；
-2. 或双击仓库根目录的 `expProjWrite.bat`（**注意**：该脚本目前只扫描
-   `examples\*\MDK-ARM\*.uvprojx`，本工程符合条件，会自动出现在菜单里）。
+2. 或双击仓库根目录的 `expProjWrite.bat`（脚本扫描
+   `examples_LL\<例程>\MDK-ARM\*.uvprojx`，本工程符合条件，会自动出现在菜单里）。
 
 ## HAL → LL 逐行对照
 
@@ -229,7 +229,7 @@ LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
 
 **为什么强调这件事**：`LCD_Test_LL` 就是因为手写逐个 setter 漏掉了
 `LL_SPI_Init()` 里的 `FRXTH` 位，导致屏幕雪花/花屏/卡死，排查了两轮。
-详见 `examples/LCD_Test_LL/README.md`。
+详见 `examples_LL/LCD_Test/README.md`。
 
 ## 参数调整
 
@@ -245,5 +245,6 @@ LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH1);
 
 | 工程 | 说明 |
 |------|------|
-| `examples/HAL/LED_Breathing/` | HAL 版（保留对照） |
-| `EmptyProj_LL/` | LL 空工程母版（本工程由它复制而来） |
+| `examples_LL/LCD_Test/` | LCD 显示例程（同一套 C++17 改造） |
+| `examples_LL/LCD_DMA_Test/` | LCD + SPI DMA 加速例程 |
+| `tempLate_LL/` | LL 空工程母版（仅 `main` + 自定义库为 C++，本工程由它演变而来） |

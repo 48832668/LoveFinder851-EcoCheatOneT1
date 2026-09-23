@@ -9,11 +9,11 @@ EcoCheatOneT1
 HelloWorld!
 ```
 
-> HAL 版对照在 `examples/HAL/LCD_Test/`（用的是工程内自带的简化 5x7 驱动）。
+> 本仓库只保留 LL 版；HAL 对照工程不在本仓库内。
 
 ## 本版本做了什么
 
-1. **整个工程转 C++17**（与 `examples/LL/LED_Breathing` 同样的做法）
+1. **整个工程转 C++17**（与 `examples_LL/LED_Breathing` 同样的做法）
 2. **屏驱换成 `LoveFinderLibForPY32_LL/ST7735`** —— 参照
    `LoveFinder830-PickSoul` 的完整 C++ 驱动（`namespace ST7735` 常量 +
    `FontDef` 字库 + 完整图形 API），底层从 STM32 HAL 移植到 PY32 LL
@@ -162,7 +162,7 @@ constexpr bool     INVERT   = true;
 
 ## 迁移中踩的坑（C++17 相关）
 
-与 `examples/LL/LED_Breathing/README.md` 相同的三条，另加一条：
+与 `examples_LL/LED_Breathing/README.md` 相同的三条，另加一条：
 
 | # | 坑 | 解法 |
 |---|----|----|
@@ -187,6 +187,6 @@ error: declaration conflicts with target of using declaration already in scope
 | 工程 | 说明 |
 |------|------|
 | `LoveFinderLibForPY32_LL/` | 屏驱库本体（本工程引用它） |
-| `examples/HAL/LCD_Test/` | HAL 版（自带简化驱动） |
-| `examples/LL/LED_Breathing/` | 第一个 C++17 转换样板，坑的完整说明在这里 |
-| `examples/HAL/LCD_DMA_Test/` | DMA 加速版（**尚未迁移**） |
+| `examples_LL/LED_Breathing/` | 第一个 C++17 转换样板，坑的完整说明在这里 |
+| `examples_LL/LCD_DMA_Test/` | DMA 加速版（SPI1_TX → DMA1_Channel1） |
+| `tempLate_LL/` | LL 空工程母版（仅 `main` + 自定义库为 C++） |
