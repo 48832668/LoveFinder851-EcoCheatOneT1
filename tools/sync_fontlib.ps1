@@ -1,4 +1,4 @@
-<#
+﻿<#
   sync_fontlib.ps1 — 同步/校验两个后端库的 FontLib
 
   背景

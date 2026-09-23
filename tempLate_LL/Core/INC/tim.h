@@ -39,7 +39,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.hpp"
+#include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -61,4 +61,3 @@ void Studio_TIM3_Init(void);
 #endif
 
 #endif /* __TIM_H__ */
-

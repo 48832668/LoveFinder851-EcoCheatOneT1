@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.hpp"
+#include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -77,4 +77,3 @@ void EXTI4_15_IRQHandler(void);
 #endif
 
 #endif /* __PY32F003_IT_H__ */
-

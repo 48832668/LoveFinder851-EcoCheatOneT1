@@ -189,4 +189,5 @@ error: declaration conflicts with target of using declaration already in scope
 | `LoveFinderLibForPY32_LL/` | 屏驱库本体（本工程引用它） |
 | `examples_LL/LED_Breathing/` | 第一个 C++17 转换样板，坑的完整说明在这里 |
 | `examples_LL/LCD_DMA_Test/` | DMA 加速版（SPI1_TX → DMA1_Channel1） |
+| `examples_LL/Button_Test/` | 按键（EXTI）+ 屏：单击/双击/长按统计，长按阈值可调 |
 | `tempLate_LL/` | LL 空工程母版（仅 `main` + 自定义库为 C++） |

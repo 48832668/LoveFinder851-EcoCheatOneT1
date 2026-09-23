@@ -7,9 +7,17 @@
 # ========== Keil 用户级 / 本地配置（不提交） ==========
 *.uvoptx
 *.uvguix.*
+*.uvgui.*
 *.scvd
 *.bak
 *.orig
+
+# ========== 烧录器 / 调试日志（本地生成） ==========
+JLinkLog.txt
+JLinkSettings.ini
+*.iex
+*.jlink
+*.log
 
 # ========== 编译中间产物兜底 ==========
 *.axf
@@ -24,6 +32,7 @@
 *.lnp
 *.lst
 *.map
+*.sct
 *.o
 *.srec
 *.tmp
@@ -37,6 +46,9 @@ $RECYCLE.BIN/
 # ========== 历史备份 / 重构工作区（不提交） ==========
 old/
 .bak-fontlib-refactor/
+
+# ========== LLM 辅助记忆（本地笔记，不提交） ==========
+memory/
 
 # ========== IDE ==========
 .vscode/

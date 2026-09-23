@@ -131,4 +131,5 @@ tempLate_LL/
 | `examples_LL/LED_Breathing/` | 第一个 C++17 转换样板，坑的完整说明在这里 |
 | `examples_LL/LCD_Test/` | LCD 显示例程（全 C++17） |
 | `examples_LL/LCD_DMA_Test/` | LCD + SPI1_TX → DMA1_Channel1 加速例程（全 C++17） |
-| `LoveFinderLibForPY32_LL/` | 共享屏驱库（在父目录 `C:\Debug\Self\`） |
+| `examples_LL/Button_Test/` | 按键（EXTI）+ 屏：单击/双击/长按统计，长按阈值可调（全 C++17） |
+| `LoveFinderLibForPY32_LL/` | 共享库：屏驱 + 按键 + 字库（在父目录 `C:\Debug\Self\`） |

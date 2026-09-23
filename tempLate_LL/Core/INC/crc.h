@@ -39,7 +39,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.hpp"
+#include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -58,4 +58,3 @@ void Studio_CRC_Init(void);
 #endif
 
 #endif /* __CRC_H__ */
-

@@ -39,7 +39,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.hpp"
+#include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -73,4 +73,3 @@ void Studio_GPIO_Init(void);
 #endif
 
 #endif /* __GPIO_H__ */
-

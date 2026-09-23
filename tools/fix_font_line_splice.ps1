@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 <#
   修复 PickSoul 生成的字库文件中的「行拼接」数据丢失问题。
