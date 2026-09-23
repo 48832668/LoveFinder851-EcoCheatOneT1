@@ -113,7 +113,7 @@ void Studio_TIM3_Init(void)
 
   /* 时基：等价 HAL_TIM_Base_Init + HAL_TIM_ConfigClockSource。
      这里用整体初始化 LL_TIM_Init()，不要逐个 LL_TIM_SetXxx() 拼 —— 后者容易漏位
-     （SPI1 就是这么漏掉 FRXTH 的，见 examples/LCD_Test_LL/README.md）。
+     （SPI1 就是这么漏掉 FRXTH 的，见 examples_LL/LCD_Test/README.md）。
      LL_TIM_Init() 内部还会产生一次更新事件，把 PSC/ARR 立即装入影子寄存器。 */
   TIM_InitStruct.Prescaler         = 0;
   TIM_InitStruct.CounterMode       = LL_TIM_COUNTERMODE_UP;
