@@ -111,6 +111,14 @@ extern "C" {
 #define PPS_DEF_MA           2000u  /* PPS 出现后的默认电流 */
 /* 发出 Request 之后等应答的上限。超时就??在??标记清掉，允许重??—?? * 否则一次丢包会把后续所有步进全部憋死??*/
 #define PPS_RDO_TIMEOUT_MS    600u
+/* ★★ caps → Request 恢复窗口 ★★
+ * 源端发出 Source_Capabilities 后只等 tSenderResponse（规范 24~30ms）就要收到
+ * Request；收不到直接 Hard Reset。所以：
+ *   · 收到 caps 后这么久之内算"恢复窗口"，此间若 Request 迟迟没有应答，
+ *     用**短超时**重发（而不是等 600ms 的长超时——那早就 HS 了）；
+ *   · 一旦收到 ACCEPT/PS_RDY 就关窗。 */
+#define PD_CAP_WINDOW_MS        25u    /* caps 到手后多长算恢复窗口 */
+#define PD_REQ_FAST_RETRY_MS    10u    /* 窗口内：发出后 10ms 无任何应答就重发 */
 
 /* ★★ PPS 保活（心跳）周期 ★★
  *
@@ -200,8 +208,14 @@ volatile uint32_t g_log_t0   = 0;
  *   [28] 最??STATUS0A          [29] 最??Interrupt(0x42)
  *   [30] hbHits 低字节（心跳顶事次数 ??正常应恒??0?? *   [31] intaAcc | int0Acc（已置位过的中断源集合） */
 volatile uint8_t  g_snap[32] = {0};
-}
 
+/* caps→Request 恢复诊断（OpenOCD: mdw <g_capDiag> 4）
+ *   [0] 累计收到 Source_Capabilities 次数
+ *   [1] 恢复窗口内 Request 重发次数
+ *   [2] 最近一次 caps→Request 发出 的延迟（ms）
+ *   [3] 累计 VBUS 掉后又回（源端重启 / recover）次数 */
+volatile uint32_t g_capDiag[4] = {0};
+}
 /* USER CODE BEGIN 0 */
 
 /*============================================================================
@@ -277,8 +291,10 @@ constexpr uint8_t S0_ACTIVITY    = 0x40u;
 constexpr uint16_t REG_LX0 = 0,  REG_LW = 68;
 constexpr uint16_t REG_RX0 = 68, REG_RW = 92;
 
-/* 步长表（双击轮换，与参考工程一致） */
-constexpr uint16_t kStepV[4] = { 20u, 50u, 100u, 500u };
+/* 步长表（双击轮换）。
+ * ★ 电压步长必须全是 20mV 的整数倍（PPS 电压分辨率 = 20mV，见 PD 3.0 Table 6-14），
+ *   否则 tgtV 会漂到非 20mV 网格上、组出来的 RDO 会被底层按 20mV 取整而对不上。 */
+constexpr uint16_t kStepV[4] = { 20u, 40u, 100u, 500u };
 constexpr uint16_t kStepI[4] = { 50u, 100u, 200u, 500u };
 
 /*--------------------------------------------------------------------------*/
@@ -1133,6 +1149,8 @@ extern "C" void App_Run(void)
   bool     fixedPend = false;                /* 有一??Fixed Request 在途，等应??*/
   bool     fixedOk   = false;                /* 已收??5V Fixed 合约??PS_RDY */
   uint32_t tFixedSent = 0u;                  /* 发出那条 Fixed Request 的时刻（超时用） */
+  uint32_t capGotAt   = 0u;                  /* 最近一次收到 caps 的时刻（恢复窗口计时） */
+  uint32_t capToReqMs = 0u;                  /* 诊断：caps→Request 延迟 */
 
   uint8_t  st      = ST_WAIT_ATTACH;
 
@@ -1310,7 +1328,18 @@ extern "C" void App_Run(void)
           const bool ok = pd.recover();
           Log(L_RECOVER, ok ? 1u : 0u, static_cast<uint8_t>(pd.specRev()));
           tRecover = now;
-          if (!haveCap) { st = ST_WAIT_CAP; }
+          /* ★ 源端重启（拔插 / Soft Reset / Hard Reset）后必须把上一轮合约状态整体作废：
+           *   havePps/fixedOk/ppsOk/rdoPend 一旦残留，重新收到 caps 时会走
+           *   "旧合约仍在"的错路，甚至被残留的 rdoPend 憋住发不出 Request，
+           *   源端 tSenderResponse(~28ms) 超时 → 直接 Hard Reset。 */
+          haveCap  = false;  havePps  = false;  ppsPos = 0u;  ppsOk = false;
+          needRdo  = false;  rdoPend  = false;  tKeepAlive = 0u;
+          fixedPos = 0u; fixedMa = 0u;
+          needFixed = false; fixedPend = false; fixedOk = false;
+          capGotAt = 0u;
+          st       = ST_WAIT_CAP;
+          tCapWait = now; softRstSent = 0u;
+          g_capDiag[3]++;
           UiReset();
         }
       }
@@ -1405,6 +1434,13 @@ extern "C" void App_Run(void)
         const bool gotCap = pd.pollSourceCapabilities(msg, true);
 
         if (gotCap) {
+          /* ★ caps 到手 = 源端正在等 Request：任何"在途"标记立即作废，别被憋住；
+           *   并标记恢复窗口起点（窗口内用短超时重发）。 */
+          fixedPend  = false;
+          rdoPend    = false;
+          capGotAt   = now;
+          capToReqMs = 0u;
+          g_capDiag[0]++;
           /* ★★??收到 Source_Capabilities ★★??           *   【为什么必须立刻回 Request】源端发??caps、并收到我们硬件自动回的
            *   GoodCRC 之后，会启动 tSenderResponse（规??24~30ms，实??SW3526S
            *   ??8.7ms）等 SINK ??Request；超时没等到 ??源端直接 Hard Reset??           *   ??VBUS 拉低重启??           *   【为什么不??内容签名去重"】源??*重播同一??caps** 恰恰??上一??           *   Request 没被受理"的信号，此时必须重发；被签名闸门挡住就等于永??           *   不回话，只能等它 HR。所以这??*收到 caps 就回 Request**??*/
@@ -1506,6 +1542,7 @@ extern "C" void App_Run(void)
             } else if (peer == Bit::PD_CTRL_ACCEPT) {
               /* 只是受理了，电源还没??—??继续??PS_RDY??*/
               st = ST_ACCEPTED;
+              capGotAt = 0u;          /* 收到 ACCEPT = 源端已受理 Request，关恢复窗口 */
               Log(L_ACCEPT, 0, peer);
             } else if (peer == Bit::PD_CTRL_REJECT) {
               if (fixedPend) {
@@ -1682,7 +1719,9 @@ extern "C" void App_Run(void)
     if (armed && pd.isReady()) {
       /* ===== ??5.5a PPS 前置：先??5V Fixed 合约 =====
        *   拿到 caps ??*第一件事**是发一??5V Fixed Request（不改变电压??       *   必然被接受），把合约先立住；随后才走 PPS 的电压切换??       *   目的：源端的 tSenderResponse(24~30ms) 窗口里永远有我方报文??       *   不会因为"悬空"??Hard Reset（HRST 会把 VBUS 拉到 vSafe0V??       *   ??整机??PD 源供??的产??= 掉电重启，致命）??*/
-      if (fixedPend && ((now - tFixedSent) >= PPS_RDO_TIMEOUT_MS)) {
+      const uint32_t fixTo = ((capGotAt != 0u) && ((now - capGotAt) < PD_CAP_WINDOW_MS))
+                             ? PD_REQ_FAST_RETRY_MS : PPS_RDO_TIMEOUT_MS;
+      if (fixedPend && ((now - tFixedSent) >= fixTo)) {
         fixedPend = false;                       /* 超时 ??允许重发 */
         needFixed = true;
       }
@@ -1693,6 +1732,10 @@ extern "C" void App_Run(void)
           needFixed  = false;
           tFixedSent = now;
           st         = ST_REQ_SENT;
+          if ((capGotAt != 0u) && ((now - capGotAt) < PD_CAP_WINDOW_MS)) {
+            g_capDiag[1]++;
+            if (capToReqMs == 0u) { capToReqMs = now - capGotAt; g_capDiag[2] = capToReqMs; }
+          }
         }
         Log(L_FIXED, ok ? 1u : 0u, fixedPos);
       }
@@ -1700,7 +1743,9 @@ extern "C" void App_Run(void)
       /* ===== ??5.5b PPS 主体：等 5V 合约立住（fixedOk）之后才??===== */
       if (fixedOk) {
       /* 超时兜底：发出后 PPS_RDO_TIMEOUT_MS 内没等到任何应答，就把在途标??       * 清掉并重??needRdo —??否则一次丢包会把后续所有步进全憋死??*/
-      if (rdoPend && ((now - tRdoSent) >= PPS_RDO_TIMEOUT_MS)) {
+      const uint32_t ppsTo = ((capGotAt != 0u) && ((now - capGotAt) < PD_CAP_WINDOW_MS))
+                             ? PD_REQ_FAST_RETRY_MS : PPS_RDO_TIMEOUT_MS;
+      if (rdoPend && ((now - tRdoSent) >= ppsTo)) {
         rdoPend = false;
         needRdo = true;
         Log(L_PERR, 3, 0);
@@ -1720,6 +1765,10 @@ extern "C" void App_Run(void)
         const uint32_t rdo = buildPpsRdo(ppsPos, tgtV, tgtI);
         const bool ok = sendPpsRequest(pd, ppsPos, tgtV, tgtI);
         if (ok) {
+          if ((capGotAt != 0u) && ((now - capGotAt) < PD_CAP_WINDOW_MS)) {
+            g_capDiag[1]++;
+            if (capToReqMs == 0u) { capToReqMs = now - capGotAt; g_capDiag[2] = capToReqMs; }
+          }
           const bool valueChanged = (tgtV != sentV) || (tgtI != sentI);
           sentV      = tgtV;
           sentI      = tgtI;
