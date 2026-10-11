@@ -77,7 +77,8 @@ namespace {
  *
  * 引脚 = 板级 KEY_INT（PA1，见 Core/INC/gpio.hpp）。
  * 硬件上是 3V3 上拉 + 按键到地 -> 按下为低电平 -> activeLow = true（默认）。
- * BUTTON 库的 init() 会自动把该引脚配成输入+上拉、EXTI 下降沿，并使能 NVIC。
+ * BUTTON 库的 init() 会自动把该引脚配成输入+上拉、EXTI **上升+下降沿都触发**，
+ * 并使能 NVIC。ISR 只置标志，去抖/判定在主循环 update() 里做。
  *============================================================================*/
 LoveFinderLib::Button g_button;
 
@@ -381,7 +382,7 @@ int main(void)
          doubleClickMs = 300
          chargeFullMs  = 2000    (长按后继续按住，每填满一次长按次数 +1)
          decayMs       = 3000    (没填满就松开，进度慢慢消退)
-     init() 内部会: 配置 GPIO 输入+上拉、EXTI 下降沿、使能 NVIC，
+     init() 内部会: 配置 GPIO 输入+上拉、EXTI 上升+下降沿、使能 NVIC，
                     并把实例登记到按键表供 EXTI 中断分发。 */
   g_button.init();
 

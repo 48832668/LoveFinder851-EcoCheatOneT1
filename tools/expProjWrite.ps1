@@ -60,6 +60,59 @@ if (-not (Test-Path $OcdExe)) { Fail "找不到 openocd.exe：$OcdExe  （请检
 $FlashTclPath = Join-Path $ScriptDir 'tools\py32_flash.tcl'
 if (-not (Test-Path -LiteralPath $FlashTclPath)) { Fail "找不到烧录驱动脚本：$FlashTclPath" }
 
+# ===================== 定位工程产出的 HEX =====================
+# 不再写死 "Objects\"。每个 Keil 工程的输出目录是它自己的配置
+# （Options for Target -> Output -> Select Folder for Objects / Name of Executable）：
+#     <MDK-ARM>\<OutputDirectory>\<OutputName>.hex
+# 实测：多数例程是 ".\Objects\"，而 PD_PDO_FIX_Req 用的是 "PD_PDO_FIX_Req\"。
+# 传 -Deep 时，若候选路径都不存在，再在 MDK-ARM 下递归搜索（编译后调用更稳）。
+function Get-ProjectHexPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uvprojx,
+        [Parameter(Mandatory = $true)][string]$MdkDir,
+        [string]$BaseName,
+        [switch]$Deep
+    )
+
+    $outDir = $null; $outName = $null
+    try {
+        $text = [System.IO.File]::ReadAllText($Uvprojx)
+        $m = [regex]::Match($text, '<OutputDirectory>\s*([^<]*?)\s*</OutputDirectory>')
+        if ($m.Success) { $outDir = $m.Groups[1].Value }
+        $m = [regex]::Match($text, '<OutputName>\s*([^<]*?)\s*</OutputName>')
+        if ($m.Success) { $outName = $m.Groups[1].Value }
+    } catch { }
+    if ([string]::IsNullOrWhiteSpace($outName)) {
+        if ([string]::IsNullOrWhiteSpace($BaseName)) {
+            $outName = [System.IO.Path]::GetFileNameWithoutExtension($Uvprojx)
+        } else { $outName = $BaseName }
+    }
+
+    # 候选 1：uvprojx 里声明的输出目录（去掉 ".\" 前缀，统一分隔符）
+    $cand = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($outDir)) {
+        $rel = $outDir.Trim()
+        while ($rel.StartsWith('.\') -or $rel.StartsWith('./')) { $rel = $rel.Substring(2) }
+        $rel = $rel.Replace('/', '\').Trim('\')
+        if ($rel -ne '') { $cand.Add((Join-Path $MdkDir (Join-Path $rel ($outName + '.hex')))) }
+    }
+    # 候选 2/3：常见的兜底位置
+    $cand.Add((Join-Path $MdkDir ($outName + '.hex')))
+    $cand.Add((Join-Path $MdkDir ("Objects\" + $outName + '.hex')))
+
+    foreach ($c in $cand) { if (Test-Path -LiteralPath $c) { return $c } }
+
+    if ($Deep) {
+        $hit = @(Get-ChildItem -LiteralPath $MdkDir -Recurse -Filter ($outName + '.hex') -File -ErrorAction SilentlyContinue)
+        if ($hit.Count -gt 0) { return $hit[0].FullName }
+        $any = @(Get-ChildItem -LiteralPath $MdkDir -Recurse -Filter '*.hex' -File -ErrorAction SilentlyContinue |
+                 Sort-Object LastWriteTime -Descending)
+        if ($any.Count -gt 0) { return $any[0].FullName }
+    }
+
+    return $cand[0]   # 都不存在：返回首选候选，供报错提示
+}
+
 # ===================== 扫描例程 =====================
 # 目录结构：examples_LL\<例程名>\MDK-ARM\*.uvprojx
 function Get-Examples {
@@ -76,7 +129,7 @@ function Get-Examples {
                 Name    = $label
                 Uvprojx = $proj.FullName
                 MdkDir  = $mdk
-                Hex     = Join-Path $mdk ("Objects\" + $proj.BaseName + ".hex")
+                Hex     = Get-ProjectHexPath -Uvprojx $proj.FullName -MdkDir $mdk -BaseName $proj.BaseName
             }
         }
     }
@@ -236,9 +289,13 @@ while ($true) {
     Write-Host ""
     Write-Host "[2/3] 正在烧录（OpenOCD，SWD 200 kHz，0x08000000-0x0800FFFF）..." -ForegroundColor Cyan
 
-    if (-not (Test-Path -LiteralPath $sel.Hex)) {
+    # 编译后再定位一次 HEX —— 输出目录以工程自身的 <OutputDirectory> 为准，
+    # 不再假设 "Objects\"（PD_PDO_FIX_Req 就把它设成了自己的工程名）。
+    $hexPath = Get-ProjectHexPath -Uvprojx $sel.Uvprojx -MdkDir $sel.MdkDir `
+                                  -BaseName ([System.IO.Path]::GetFileNameWithoutExtension($sel.Uvprojx)) -Deep
+    if (-not (Test-Path -LiteralPath $hexPath)) {
         Write-Host "      [失败] 找不到 HEX 文件，编译可能未生成：" -ForegroundColor Red
-        Write-Host ("                " + $sel.Hex) -ForegroundColor DarkGray
+        Write-Host ("                " + $hexPath) -ForegroundColor DarkGray
         Write-Host "      请检查 Keil 工程 Options for Target -> Output -> Create HEX File。" -ForegroundColor Yellow
         Read-Host "      按回车返回菜单" | Out-Null
         continue
@@ -246,7 +303,7 @@ while ($true) {
 
     # --- 解析 Intel HEX -> 128 字节页（超出 64KB 范围直接报错） ---
     try {
-        $pages = Get-HexPages $sel.Hex
+        $pages = Get-HexPages $hexPath
     } catch {
         Write-Host ("      [失败] " + $_.Exception.Message) -ForegroundColor Red
         Read-Host "      按回车返回菜单" | Out-Null

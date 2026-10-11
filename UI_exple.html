@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PD_PPS_Req · 160×80 UI 参考</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#111820; --line:#1d2734;
+    --txt:#c8d4e0; --dim:#697a8c; --accent:#38bdf8; --amber:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 "Segoe UI",system-ui,-apple-system,sans-serif;}
+  header{padding:14px 22px;border-bottom:1px solid var(--line);
+         display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header h1{margin:0;font-size:16px;color:#fff;font-weight:600;letter-spacing:.3px}
+  header .sub{color:var(--dim);font-size:12px}
+  main{display:flex;gap:20px;padding:20px;align-items:flex-start;flex-wrap:wrap}
+  .stage{flex:1;min-width:520px}
+  canvas{display:block;image-rendering:pixelated;border-radius:8px;
+         border:1px solid var(--line);background:#000;}
+  #cv{width:800px;height:400px;max-width:100%;cursor:pointer;touch-action:none}
+  #cv1{width:160px;height:80px;margin-top:10px}
+  .cap{color:var(--dim);font-size:12px;margin:10px 0 4px}
+  .panel{width:330px;flex:none;background:var(--panel);border:1px solid var(--line);
+         border-radius:10px;padding:16px}
+  .panel h2{margin:0 0 10px;font-size:13px;color:#8fb8e8;font-weight:600;
+            border-bottom:1px dashed var(--line);padding-bottom:6px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;
+      border-bottom:1px solid #161e28;font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--dim)}
+  .kv .v{font-family:Consolas,monospace;color:#fff}
+  .v.volt{color:#7dd3fc}
+  .v.curr{color:#fcd34d}
+  .hint{background:#0d131b;border:1px solid var(--line);border-radius:7px;
+        padding:10px 12px;font-size:12px;color:var(--dim);margin-top:12px;line-height:1.8}
+  .hint b{color:var(--txt);font-weight:600}
+  .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;
+       font-family:Consolas,monospace}
+  .tag.volt{background:#0b3a52;color:#7dd3fc;border:1px solid #14536f}
+  .tag.curr{background:#4a3406;color:#fcd34d;border:1px solid #6b4c08}
+  .tag.idle{background:#1b242f;color:#697a8c;border:1px solid #26313f}
+  #log{font-family:Consolas,monospace;font-size:11px;color:#7c8a99;
+       background:#0d131b;border:1px solid var(--line);border-radius:7px;
+       padding:8px 10px;height:112px;overflow:auto;margin-top:12px;line-height:1.7}
+  #log div{white-space:nowrap}
+  #log .hl{color:#7dffb0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PD_PPS_Req — 交互参考</h1>
+  <span class="sub">160×80 单色屏 · 上下双行(38px) · 左进度条 / 右数值+上限 · 单击切区 / 长按步进</span>
+</header>
+
+<main>
+  <div class="stage">
+    <canvas id="cv" width="800" height="400"></canvas>
+    <div class="cap">↑ 5× 放大预览（可直接用鼠标点按 / 长按）</div>
+    <canvas id="cv1" width="160" height="80"></canvas>
+    <div class="cap">↑ 1:1 真实尺寸 160×80</div>
+  </div>
+
+  <div class="panel">
+    <h2>当前状态</h2>
+    <div class="kv"><span class="k">选中区域</span><span class="v" id="hSel">—</span></div>
+    <div class="kv"><span class="k">电压 / 步进</span><span class="v volt" id="hV">—</span></div>
+    <div class="kv"><span class="k">电流 / 步进</span><span class="v curr" id="hI">—</span></div>
+    <div class="kv"><span class="k">按键相位</span><span class="v" id="hPhase">idle</span></div>
+
+    <h2 style="margin-top:16px">交互规则</h2>
+    <div class="hint">
+      <b>单击</b> → 切换选中行（高亮边框 + 提亮底色）<br>
+      <b>长按 ≥200ms</b> → 判定成立，立即步进一次<br>
+      <b>持续按住</b> → 每 200ms 再步进一次<br>
+      <b>到顶</b> → 回绕到最小值（只有一个按键）<br>
+      <br>
+      <span class="tag volt">V</span> 步进 20 mV &nbsp; 范围 3300–21000<br>
+      <span class="tag curr">A</span> 步进 50 mA &nbsp; 范围 0–5000<br>
+      <br>
+      上限数值绘制在右侧实时示数<b>下方</b>。
+    </div>
+
+    <h2 style="margin-top:16px">事件日志</h2>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+ * 屏幕尺寸 & 业务常量
+ * ======================================================================== */
+const W = 160, H = 80, SCALE = 5;
+
+const V_MIN = 3300,  V_MAX = 21000, V_STEP = 20;
+const I_MIN = 0,     I_MAX = 5000,  I_STEP = 50;
+
+const PRESS_MS = 200;          /* 长按判定 / 重复周期 */
+
+/* ==========================================================================
+ * 布局常量（屏幕坐标）
+ * --------------------------------------------------------------------------
+ *  行0: y = 0  .. 37   (高 38)
+ *  空档: y = 38 .. 41
+ *  行1: y = 42 .. 79   (高 38)
+ * ======================================================================== */
+const ROW_Y   = [0, 42];
+const ROW_H   = 38;
+const ROW_X   = 0,  ROW_W = 160;
+const BAR_X   = 3,  BAR_W = 70, BAR_DY = 6, BAR_H = 26;
+const TXT_X   = 76;
+const NUM_DY  = 6;   /* 大号数值相对行顶 */
+const LIM_DY  = 24;  /* 上限文字相对行顶 */
+
+/* ==========================================================================
+ * 调色板（RGB）
+ * ======================================================================== */
+const COL = {
+  bg:        [10, 14, 20],
+  rowBg:     [16, 22, 30],
+  rowBgSel:  [20, 31, 43],
+  border:    [30, 41, 56],
+  borderSel: [56, 189, 248],
+  track:     [23, 32, 43],
+  trackEdge: [37, 49, 65],
+  voltFill:  [56, 189, 248],
+  currFill:  [251, 191, 36],
+  voltText:  [125, 211, 252],
+  currText:  [252, 211, 77],
+  dim:       [110, 125, 143],
+};
+
+/* ==========================================================================
+ * 5×7 点阵字体（每字形 7 字节，每字节低 5 位有效）
+ * ======================================================================== */
+const FONT = {
+  '0':[0x0E,0x11,0x11,0x11,0x11,0x11,0x0E],
+  '1':[0x04,0x0C,0x04,0x04,0x04,0x04,0x0E],
+  '2':[0x0E,0x11,0x01,0x02,0x04,0x08,0x1F],
+  '3':[0x1F,0x02,0x04,0x02,0x01,0x11,0x0E],
+  '4':[0x02,0x06,0x0A,0x12,0x1F,0x02,0x02],
+  '5':[0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E],
+  '6':[0x06,0x08,0x10,0x1E,0x11,0x11,0x0E],
+  '7':[0x1F,0x01,0x02,0x04,0x08,0x08,0x08],
+  '8':[0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E],
+  '9':[0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C],
+  'm':[0x00,0x00,0x1A,0x15,0x15,0x15,0x15],
+  'V':[0x11,0x11,0x11,0x11,0x0A,0x0A,0x04],
+  'A':[0x04,0x0A,0x11,0x11,0x1F,0x11,0x11],
+  'W':[0x11,0x11,0x11,0x15,0x15,0x15,0x0A],
+};
+
+/* ==========================================================================
+ * 像素缓冲
+ * ======================================================================== */
+const off  = document.createElement('canvas');
+off.width = W; off.height = H;
+const octx = off.getContext('2d');
+const imgData = octx.createImageData(W, H);
+const px = imgData.data;
+
+function setPx(x, y, c) {
+  if (x < 0 || x >= W || y < 0 || y >= H) return;
+  const i = (y * W + x) * 4;
+  px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = 255;
+}
+function fillRect(x, y, w, h, c) {
+  for (let j = y; j < y + h; j++)
+    for (let i = x; i < x + w; i++) setPx(i, j, c);
+}
+function strokeRect(x, y, w, h, c) {
+  for (let i = 0; i < w; i++) { setPx(x + i, y, c); setPx(x + i, y + h - 1, c); }
+  for (let j = 0; j < h; j++) { setPx(x, y + j, c); setPx(x + w - 1, y + j, c); }
+}
+function clearScreen(c) {
+  for (let i = 0; i < W * H; i++) {
+    px[i * 4] = c[0]; px[i * 4 + 1] = c[1]; px[i * 4 + 2] = c[2]; px[i * 4 + 3] = 255;
+  }
+}
+
+/* ---------- 文字绘制 ---------- */
+function drawGlyph(ch, x, y, s, c) {
+  const g = FONT[ch];
+  if (!g) return;
+  for (let row = 0; row < 7; row++) {
+    const bits = g[row];
+    if (!bits) continue;
+    for (let col = 0; col < 5; col++) {
+      if (!(bits & (0x10 >> col))) continue;
+      const bx = x + col * s, by = y + row * s;
+      for (let dy = 0; dy < s; dy++)
+        for (let dx = 0; dx < s; dx++) setPx(bx + dx, by + dy, c);
+    }
+  }
+}
+/** 返回绘制后的结束 x 坐标（不含末字符右侧间距） */
+function drawText(str, x, y, s, c) {
+  const adv = 6 * s;
+  let cx = x;
+  for (const ch of str) { drawGlyph(ch, cx, y, s, c); cx += adv; }
+  return cx - s;                       /* 末尾去掉一个字距 */
+}
+function textWidth(str, s) { return str.length * 6 * s - s; }
+
+/* ==========================================================================
+ * 状态机
+ * ======================================================================== */
+const state = {
+  sel: 0,          /* 0 = 电压行, 1 = 电流行 */
+  volt: 15000,     /* mV */
+  curr: 3000,      /* mA */
+  phase: 'idle',   /* idle | pressed | long */
+};
+
+/* ==========================================================================
+ * 渲染
+ * ======================================================================== */
+function drawRow(idx) {
+  const ry      = ROW_Y[idx];
+  const isVolt  = (idx === 0);
+  const isSel   = (state.sel === idx);
+  const val     = isVolt ? state.volt : state.curr;
+  const vmin    = isVolt ? V_MIN : I_MIN;
+  const vmax    = isVolt ? V_MAX : I_MAX;
+  const unit    = isVolt ? 'mV'  : 'mA';
+  const fillCol = isVolt ? COL.voltFill : COL.currFill;
+  const textCol = isVolt ? COL.voltText : COL.currText;
+
+  /* --- 行底 + 边框 --- */
+  fillRect(ROW_X, ry, ROW_W, ROW_H, isSel ? COL.rowBgSel : COL.rowBg);
+  strokeRect(ROW_X, ry, ROW_W, ROW_H, isSel ? COL.borderSel : COL.border);
+
+  /* --- 进度条轨道 --- */
+  const by = ry + BAR_DY;
+  fillRect(BAR_X, by, BAR_W, BAR_H, COL.track);
+
+  /* --- 进度条填充 --- */
+  const t  = Math.max(0, Math.min(1, (val - vmin) / (vmax - vmin)));
+  const fw = Math.round(t * BAR_W);
+  if (fw > 0) fillRect(BAR_X, by, fw, BAR_H, fillCol);
+
+  /* --- 进度条描边（选中时用高亮色） --- */
+  strokeRect(BAR_X - 1, by - 1, BAR_W + 2, BAR_H + 2,
+             isSel ? COL.borderSel : COL.trackEdge);
+
+  /* --- 右侧：大号实时示数 --- */
+  const bigStr = String(val);
+  const bigW   = textWidth(bigStr, 2);
+  drawText(bigStr, TXT_X, ry + NUM_DY, 2, textCol);
+
+  /* --- 右侧：单位（小号，跟在大号数字后面） --- */
+  drawText(unit, TXT_X + bigW + 5, ry + NUM_DY + 7, 1, COL.dim);
+
+  /* --- 右侧：上限（在实时示数下方） --- */
+  drawText(vmax + unit, TXT_X, ry + LIM_DY, 1, COL.dim);
+}
+
+function render() {
+  clearScreen(COL.bg);
+  drawRow(0);
+  drawRow(1);
+  octx.putImageData(imgData, 0, 0);
+
+  ctxBig.imageSmoothingEnabled = false;
+  ctxBig.drawImage(off, 0, 0, W, H, 0, 0, W * SCALE, H * SCALE);
+
+  ctxSmall.imageSmoothingEnabled = false;
+  ctxSmall.drawImage(off, 0, 0);
+}
+
+/* ==========================================================================
+ * HUD
+ * ======================================================================== */
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+
+function log(msg, hl) {
+  const d = document.createElement('div');
+  d.innerHTML = '<span class="hl">›</span> ' + msg;
+  if (hl) d.classList.add('hl');
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 40) logEl.removeChild(logEl.firstChild);
+}
+
+function updateHud() {
+  $('hSel').innerHTML = state.sel === 0
+    ? '<span class="tag volt">电压行</span>'
+    : '<span class="tag curr">电流行</span>';
+
+  $('hV').textContent = state.volt + ' mV  (±' + V_STEP + ')';
+  $('hI').textContent = state.curr + ' mA  (±' + I_STEP + ')';
+
+  const p = state.phase;
+  $('hPhase').textContent = p;
+  $('hPhase').style.color = p === 'long' ? '#7dffb0' : (p === 'pressed' ? '#fcd34d' : '');
+}
+
+/* ==========================================================================
+ * 按键逻辑
+ * --------------------------------------------------------------------------
+ *  pointerdown
+ *      ├─ 立即选中该行
+ *      └─ 启动 200ms 定时器
+ *             └─ 超时 => 判定长按成立
+ *                    ├─ 立即步进一次
+ *                    └─ 每 200ms 再步进一次（setInterval）
+ *  pointerup
+ *      ├─ 取消定时器
+ *      └─ 若长按未成立 => 视为单击（选中已生效）
+ * ======================================================================== */
+let pressTimer  = null;
+let repeatTimer = null;
+let longFired   = false;
+
+function stepValue() {
+  if (state.sel === 0) {
+    state.volt += V_STEP;
+    if (state.volt > V_MAX) state.volt = V_MIN;   /* 到顶回绕 */
+    log('电压步进 → ' + state.volt + ' mV');
+  } else {
+    state.curr += I_STEP;
+    if (state.curr > I_MAX) state.curr = I_MIN;
+    log('电流步进 → ' + state.curr + ' mA');
+  }
+  render();
+  updateHud();
+}
+
+function screenPos(e) {
+  const r = cv.getBoundingClientRect();
+  return {
+    x: Math.floor((e.clientX - r.left) / r.width  * W),
+    y: Math.floor((e.clientY - r.top ) / r.height * H),
+  };
+}
+
+function onDown(e) {
+  e.preventDefault();
+  const p = screenPos(e);
+  const row = p.y < 40 ? 0 : 1;
+
+  state.sel   = row;
+  state.phase = 'pressed';
+  longFired   = false;
+
+  render();
+  updateHud();
+  log('按下 → ' + (row === 0 ? '电压行' : '电流行'));
+
+  clearTimeout(pressTimer);
+  clearInterval(repeatTimer);
+
+  pressTimer = setTimeout(() => {
+    longFired   = true;
+    state.phase = 'long';
+    updateHud();
+    log('长按判定成立 (200ms)');
+    stepValue();
+    repeatTimer = setInterval(stepValue, PRESS_MS);
+  }, PRESS_MS);
+
+  if (cv.setPointerCapture) cv.setPointerCapture(e.pointerId);
+}
+
+function onUp(e) {
+  clearTimeout(pressTimer);
+  clearInterval(repeatTimer);
+  pressTimer = repeatTimer = null;
+
+  if (!longFired) {
+    log('单击 → 选中 ' + (state.sel === 0 ? '电压行' : '电流行') + '（未改值）');
+  }
+  state.phase = 'idle';
+  render();
+  updateHud();
+}
+
+/* ==========================================================================
+ * 初始化
+ * ======================================================================== */
+const cv       = $('cv');
+const ctxBig   = cv.getContext('2d');
+const cvSmall  = $('cv1');
+const ctxSmall = cvSmall.getContext('2d');
+
+cv.addEventListener('pointerdown', onDown);
+cv.addEventListener('pointerup',   onUp);
+cv.addEventListener('pointercancel', onUp);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+render();
+updateHud();
+log('初始化: 电压 ' + state.volt + ' mV / 电流 ' + state.curr + ' mA');
+log('选中默认: 电压行');
+</script>
+</body>
+</html>

@@ -74,7 +74,7 @@
 /***************************************
  * @brief GPIO Init
  *        PA0  FUSB_INT   EXTI0 rising
- *        PA1  KEY_INT    EXTI1 FALLING + 内部上拉   <-- 本例程的按键
+ *        PA1  KEY_INT    EXTI1 RISING_FALLING + 内部上拉   <-- 本例程的按键
  *        PA4  LCD_DC     output PP (initial low)
  *        PA6  LCD_RESET  output PP (initial low)
  *        PA7  LCD_CS     output PP (initial low)
@@ -82,7 +82,10 @@
  *        PB5  CLK_INT    EXTI5 rising
  *
  * 按键极性：硬件上 KEY_INT 是 3V3 上拉 + 按键到地，
- *           所以【释放 = 高，按下 = 低 -> 下降沿】。
+ *           所以【释放 = 高，按下 = 低】。
+ * ★ 本工程要求 KEY 的 EXTI **上升沿 + 下降沿都进中断**（RISING_FALLING）：
+ *   下降沿 = 按下，上升沿 = 松开。ISR 只记录标志/电平，去抖与单击/双击/长按
+ *   判定全部放主循环（见 LoveFinderLibForPY32_LL/BUTTON 与 main.cpp）。
  **************************************/
 void Studio_GPIO_Init(void)
 {
@@ -130,11 +133,13 @@ void Studio_GPIO_Init(void)
   EXTI_InitStruct.LineCommand = ENABLE;
   LL_EXTI_Init(&EXTI_InitStruct);
 
-  /* ---- EXTI line 1 (PA1) : 按键按下 = 下降沿 ---- */
+  /* ---- EXTI line 1 (PA1) : 按键【按下(下降沿) + 松开(上升沿)】都触发 ----
+   * 本工程与 PD_PDO_FIX_Req 保持一致：KEY 用任意跳变沿。ISR 只置标志，
+   * 主循环做去抖/判定（BUTTON 库的 onExti()/update()）。 */
   LL_EXTI_SetEXTISource(LL_EXTI_CONFIG_PORTA, LL_EXTI_CONFIG_LINE1);
   EXTI_InitStruct.Line = LL_EXTI_LINE_1;
   EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
-  EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_FALLING;
+  EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_RISING_FALLING;
   EXTI_InitStruct.LineCommand = ENABLE;
   LL_EXTI_Init(&EXTI_InitStruct);
   LL_EXTI_ClearFlag(LL_EXTI_LINE_1);

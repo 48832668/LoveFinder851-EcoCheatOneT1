@@ -3,7 +3,8 @@
 PY32F003 + **按键（EXTI）+ ST7735 彩屏**示例
 （**LL 库 + C++17 + LoveFinderLibForPY32_LL**）。
 
-按键在硬件上是 **3V3 上拉 + 按键到地**，所以 **下降沿 = 按下**。
+按键在硬件上是 **3V3 上拉 + 按键到地**，所以 **下降沿 = 按下、上升沿 = 松开**；
+EXTI 配成 **两沿都触发**（任意跳变沿），但 ISR 只记标志，判定全在主循环。
 上电后屏幕实时显示按键的 **单击 / 双击 / 长按** 统计，以及 **长按阈值**（可调）、
 **双击间隔阈值** 和 **长按充能进度**：
 
@@ -45,14 +46,21 @@ CHG:  0%   2x:LP+
 2. **新增按键库 `LoveFinderLibForPY32_LL/BUTTON/`**
    —— 从 `LoveFinderLibForSTM32_HAL/BUTTON` 移植到 PY32 LL：
    - `HAL_GPIO_Init` + `GPIO_MODE_IT_FALLING` → `LL_GPIO_Init` + `LL_EXTI_SetEXTISource` + `LL_EXTI_Init`
+     （本版 EXTI 改为 **`RISING_FALLING` 两沿都触发**，见第 4 条）
    - `HAL_GetTick()` → `BSP_GetTick()`
    - `HAL_GPIO_EXTI_Callback(pin)` → `Button::dispatchExti(extiLine)`（库内自带实例表，
      工程的 EXTI 中断只需一行）
    - API 与状态机与 STM32 版**完全一致**，可直接替换
 3. **屏驱沿用共享库** `LoveFinderLibForPY32_LL/ST7735` + 字符级编译字库
-4. **按键 GPIO 用正确极性**：PA1 = 输入 + 内部上拉兜底、EXTI **下降沿**
-   （`tempLate_LL` 的 `gpio.c` 本来就是下降沿，但 `LCD_Test` 里被改成了上升沿，
-   本例程按「3V3 上拉」的要求用下降沿）
+4. **按键 GPIO 用正确极性 + 任意跳变沿**：PA1 = 输入 + 内部上拉兜底、
+   EXTI **上升沿 + 下降沿都触发**（`LL_EXTI_TRIGGER_RISING_FALLING`）。
+   - 硬件是「3V3 上拉 + 按键到地」：按下 = 下降沿，松开 = 上升沿。
+   - ★ **两沿都触发**是为了对齐真实工程 `PD_PDO_FIX_Req` 的用法；关键是
+     ISR（`BUTTON` 库的 `onExti()`）**只记录标志与边沿后的电平**，去抖和
+     单击/双击/长按判定全部在主循环 `update()` 里做（时间型去抖）。
+     ISR 里**不读 tick、不去抖、不碰任何外设** —— 详见下文「代码入口」。
+   - `tempLate_LL` 的 `gpio.c` 原本是下降沿、`LCD_Test` 里被改成上升沿；
+     本例程显式用两沿，并在库 `configureExti()` 里也固定为两沿（双保险）。
 5. **屏幕按「字段变化」增量刷新** —— 阻塞 SPI 下全屏重绘会拖慢主循环，
    所以每行只在数值真的变了才重写
 
@@ -129,7 +137,7 @@ Keil 文件组里新增一组 `LoveFinderLibForPY32_LL/BUTTON`，里面只有
 
 | 信号 | 开发板引脚 | 说明 |
 |------|-----------|------|
-| KEY_INT | **PA1** | 3V3 上拉 + 按键到地 → **下降沿 = 按下**；EXTI1 |
+| KEY_INT | **PA1** | 3V3 上拉 + 按键到地 → 按下=下降沿/松开=上升沿，**EXTI1 两沿都触发** |
 
 > 库内还会再开 `LL_GPIO_PULL_UP` 内部上拉兜底，防止引脚悬空误触发。
 
@@ -165,7 +173,8 @@ g_button.init();
 `init()` 内部做了三件事（见 `BUTTON/BUTTON.hpp` 的 `configureExti()`）：
 
 1. GPIO 配成**输入 + 内部上拉**（外部已有 3V3 上拉，这里兜底）
-2. **EXTI 下降沿** + `LL_EXTI_SetEXTISource(PORTA, LINE1)`
+2. **EXTI 上升 + 下降沿都触发**（`LL_EXTI_TRIGGER_RISING_FALLING`）
+   + `LL_EXTI_SetEXTISource(PORTA, LINE1)`
 3. 使能 NVIC（`EXTI0_1_IRQn`，优先级 `BUTTON_IRQ_PRIORITY` = 2）
    并把实例登记到库内按键表
 
@@ -183,7 +192,9 @@ void EXTI0_1_IRQHandler(void)
 }
 ```
 
-> **必须**有这一步，否则按下的下降沿不会被记录，计数永远是 0。
+> **必须**有这一步，否则边沿不会被记录。注意 ISR 里只调 `dispatchExti()` 一行 ——
+> 库的 `onExti()` 也只写 3 个 volatile（边沿标志/边沿后电平/边沿计数），
+> **不做去抖、不发事件、不读 tick、不碰外设**。
 
 ### 主循环
 
@@ -197,8 +208,9 @@ while (1)
 }
 ```
 
-`update()` 负责消抖、双击窗口计时、长按阈值判定和充能/消退，
-**调用间隔必须 ≤ 10 ms**（双击窗口 300 ms 靠它计时；间隔过大单击会被误判）。
+`update()` 在主循环里**直接采样引脚 + 时间型去抖**（原始电平稳定 `debounceMs`
+才认账），再跑单击/双击/长按/充能状态机。ISR 只是"有事发生"的提示，丢了也不影响
+功能。**调用间隔必须 ≤ 10 ms**（双击窗口 300 ms 靠它计时；间隔过大单击会被误判）。
 
 ## 长按阈值怎么调（三个入口）
 
@@ -294,7 +306,8 @@ while (1)
 |---|----|----|
 | 1 | **EXTI 挂起标志必须手动清**，否则中断会反复进入 | 库的 `dispatchExti()` 内部 `LL_EXTI_ClearFlag()`；工程侧不要重复清 |
 | 2 | 厂商 `py32f0xx_ll_exti.h` 的 `LL_EXTI_CONFIG_LINE5` 起掩码只有 **1 位**（选不了 PORTF），与 `LINE0..4` 的 3 位不一致 | `BUTTON.cpp` 不依赖这些宏，自己按 `EXTICR` 的 8 位字段编码（`extiConfigLine()`） |
-| 3 | **极性**：`LCD_Test` 里 PA1 的 EXTI 是**上升沿**（那是别的用途） | 本例程按「3V3 上拉、按下为低」改成**下降沿** —— 沿选错了按下去毫无反应 |
+| 3 | **极性/沿**：`LCD_Test` 里 PA1 的 EXTI 是**上升沿**（那是别的用途） | 本例程按「3V3 上拉、按下为低」配成**上升+下降沿都触发**；ISR 只记标志，靠主循环实测电平判定，所以极性/丢沿都不会误判 |
+| 5 | **ISR 里绝不能等 tick / 做去抖**：SysTick 优先级低于 EXTI，在 ISR 里等时间是**死锁** | 库的 `onExti()` 只写 3 个 volatile；去抖是主循环 `update()` 的时间型去抖（实测电平稳定 `debounceMs` 才认账） |
 | 4 | **`BSP_GetTick()` 必须真的在跑**（由 `SysTick_Handler()` 自增） | 若 SysTick 中断没使能（`LL_InitTick()` 漏置 `TICKINT`，见 `tempLate_LL/README.md` 补丁 1），按键状态机会完全不动 |
 
 ## 相关工程 / 库

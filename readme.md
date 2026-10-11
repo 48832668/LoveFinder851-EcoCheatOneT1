@@ -17,7 +17,7 @@
 
 &gt; 一块面向 PY32 入门学习、外设覆盖全面、同时又能直接当成品用的小型开发板。  
 &gt; 板载 PY32F003F1U6、FUSB302、INA226、CH32V203 DAPLink、RTC、EEPROM、ST7735 SPI 彩屏等，配铝壳与前后 IO 面板，既能学习，也能落地成完整方案。  
-&gt; **目前已完成首批 LL 库例程：呼吸灯、按键测试、屏幕测试（硬件 SPI / SPI+DMA）。**
+&gt; **目前已完成 LL 库例程：呼吸灯、按键测试、屏幕测试（硬件 SPI / SPI+DMA）、PD 诱骗 Source PDO 列表检测（FUSB302 纯 SINK + 串口打印）。**
 
 ---
 

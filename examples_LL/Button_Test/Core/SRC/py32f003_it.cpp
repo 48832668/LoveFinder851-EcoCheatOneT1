@@ -185,9 +185,10 @@ void EXTI0_1_IRQHandler(void)
   }
   if (LL_EXTI_IsActiveFlag(LL_EXTI_LINE_1) != 0U)
   {
-    /* PA1 KEY_INT —— 按键按下（下降沿）。
+    /* PA1 KEY_INT —— 按键【按下(下降沿) + 松开(上升沿)】都进中断。
        dispatchExti() 内部会清挂起标志，再把中断分发给所有 EXTI 线匹配的
-       按键实例（见 LoveFinderLibForPY32_LL/BUTTON/BUTTON.hpp）。
+       按键实例；ISR 只做"记录标志/电平"，去抖与单击/双击/长按判定由主循环
+       的 Button::update() 完成（见 LoveFinderLibForPY32_LL/BUTTON）。
        注意：这里【不能】再自己 LL_EXTI_ClearFlag()，那是库的职责。 */
     (void)LoveFinderLib::Button::dispatchExti(LL_EXTI_LINE_1);
   }

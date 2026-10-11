@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FUSB302 业务逻辑详解</title>
+<style>
+@page {
+  size: A4;
+  margin: 15mm 14mm 16mm 14mm;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body {
+  font-family: "Microsoft YaHei", "Segoe UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.78;
+  color: #1c1c1c;
+  margin: 0;
+  word-wrap: break-word;
+}
+
+h1 {
+  font-size: 21pt;
+  font-weight: 600;
+  color: #0d2b45;
+  margin: 0 0 6px 0;
+  padding-bottom: 8px;
+  border-bottom: 2.5px solid #0d2b45;
+  line-height: 1.35;
+}
+
+h2 {
+  font-size: 15pt;
+  font-weight: 600;
+  color: #0d2b45;
+  margin: 26px 0 10px 0;
+  padding: 5px 0 5px 10px;
+  border-left: 4px solid #2f6fb0;
+  background: #f2f6fb;
+  page-break-after: avoid;
+  line-height: 1.4;
+}
+
+h3 {
+  font-size: 12.5pt;
+  font-weight: 600;
+  color: #1f4e79;
+  margin: 20px 0 8px 0;
+  page-break-after: avoid;
+  line-height: 1.4;
+}
+
+h4 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #2f6fb0;
+  margin: 15px 0 6px 0;
+  page-break-after: avoid;
+}
+
+p { margin: 8px 0; }
+
+ul, ol { margin: 8px 0; padding-left: 24px; }
+li { margin: 3px 0; }
+
+a { color: #1a5fa8; text-decoration: none; }
+
+strong { font-weight: 600; color: #0d2b45; }
+
+hr {
+  border: none;
+  border-top: 1px solid #d8dee6;
+  margin: 20px 0;
+}
+
+blockquote {
+  margin: 10px 0;
+  padding: 7px 13px;
+  border-left: 3px solid #b9c6d6;
+  background: #f6f8fb;
+  color: #3c4858;
+}
+blockquote p { margin: 4px 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 9.3pt;
+  page-break-inside: auto;
+}
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th {
+  background: #e8eef6;
+  border: 0.6px solid #b9c6d6;
+  padding: 5px 7px;
+  text-align: left;
+  font-weight: 600;
+  color: #0d2b45;
+}
+td {
+  border: 0.6px solid #ccd6e2;
+  padding: 5px 7px;
+  vertical-align: top;
+}
+tbody tr:nth-child(even) { background: #fafbfd; }
+
+code {
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 9.2pt;
+  background: #eef1f5;
+  border: 0.5px solid #dde3ea;
+  border-radius: 3px;
+  padding: 0.5px 3.5px;
+  color: #a33a2c;
+}
+
+pre {
+  background: #f7f9fb;
+  border: 0.7px solid #dde3ea;
+  border-left: 3px solid #2f6fb0;
+  border-radius: 4px;
+  padding: 9px 11px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  page-break-inside: avoid;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 8.8pt;
+  line-height: 1.55;
+  color: #24292f;
+}
+
+div.mermaid {
+  margin: 14px 0;
+  text-align: center;
+  page-break-inside: avoid;
+}
+div.mermaid svg { max-width: 100%; height: auto; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); border: 0;
+}
+</style>
+</head>
+<body>
+<h1>FUSB302 业务逻辑详解</h1>
+<blockquote>
+<p>面向小白，从"谁负责什么"讲到寄存器级实现。<br>
+对应工程：<code>EcoCheatOneT1</code> / <code>PD_PDO_List_Det</code>（PY32F003F18U6 + FUSB302B + 160×80 ST7735）<br>
+最后更新：2026-10-09（Hard Reset 已提前到开机）</p>
+</blockquote>
+<hr>
+<h2>阅读建议</h2>
+<p>这份文档可以分三次读：</p>
+<table>
+<thead>
+<tr>
+<th>轮次</th>
+<th>读哪几章</th>
+<th>目标</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>第一轮</td>
+<td>第 0 ~ 3 章</td>
+<td>建立整体印象：谁跟谁说话、程序分几段</td>
+</tr>
+<tr>
+<td>第二轮</td>
+<td>第 4 ~ 5 章</td>
+<td>搞懂"一次完整协商"到底发生了什么</td>
+</tr>
+<tr>
+<td>第三轮</td>
+<td>第 6 ~ 8 章</td>
+<td>寄存器怎么配、中断怎么处理、Hard Reset 的坑</td>
+</tr>
+<tr>
+<td>工具书</td>
+<td>第 9 ~ 11 章 + 附录</td>
+<td>看代码 / 排障时随时查</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>目录</h2>
+<ul>
+<li><a href="#第-0-章先建立整体印象">第 0 章　先建立整体印象</a></li>
+<li><a href="#第-1-章板子上的角色分工">第 1 章　板子上的角色分工</a></li>
+<li><a href="#第-2-章pd-协议最小必要知识">第 2 章　PD 协议最小必要知识</a></li>
+<li><a href="#第-3-章程序的三段时间线">第 3 章　程序的三段时间线</a></li>
+<li><a href="#第-4-章主循环的五个工位">第 4 章　主循环的五个工位</a></li>
+<li><a href="#第-5-章一次完整-pd-协商的全过程">第 5 章　一次完整 PD 协商的全过程</a></li>
+<li><a href="#第-6-章fusb302-寄存器配置逐条解释">第 6 章　FUSB302 寄存器配置逐条解释</a></li>
+<li><a href="#第-7-章中断处理">第 7 章　中断处理</a></li>
+<li><a href="#第-8-章hard-reset-的坑与复活">第 8 章　Hard Reset 的坑与"复活"</a></li>
+<li><a href="#第-9-章关键常量速查">第 9 章　关键常量速查</a></li>
+<li><a href="#第-10-章没有串口怎么看内部状态">第 10 章　没有串口，怎么看内部状态</a></li>
+<li><a href="#第-11-章故障排查对照表">第 11 章　故障排查对照表</a></li>
+<li><a href="#附录-a文件与函数索引">附录 A　文件与函数索引</a></li>
+<li><a href="#附录-b术语中英对照">附录 B　术语中英对照</a></li>
+</ul>
+<hr>
+<h2>第 0 章　先建立整体印象</h2>
+<h3>一句话</h3>
+<blockquote>
+<p>开机先打一枪 Hard Reset 把上一轮的合约清掉 → 等按键 → 按下后先安静听 250ms，<br>
+没广播就发 Soft Reset 催（最多 3 枪）→ 收到 <code>Source_Capabilities</code> 就<strong>当场</strong>回一条<br>
+只要第 1 档 5V 的 <code>Request</code> → 源端回 <code>PS_RDY</code> 说明谈成，屏上第 1 条 PDO 反白高亮。</p>
+</blockquote>
+<h3>三件最容易搞错的事</h3>
+<ol>
+<li><strong>PD 不是"一根线"，是"一根线上的对话"</strong>。VBUS 负责送电，CC1/CC2 负责聊天。<br>
+   屏幕上显示的电压电流，全部来自 CC 线上的文字，跟 VBUS 的实际电压没有直接关系。</li>
+<li><strong>FUSB302 不做决定</strong>。它只负责物理层：BMC 编解码、CRC、自动回 GoodCRC。<br>
+   "该说什么话"是 PY32 的活。</li>
+<li><strong>这个程序基本不用中断引脚</strong>。INT 脚（PA0）接了、EXTI 也开了，但 ISR 里只清标志位，<br>
+   一行 PD 代码都没有。所有 PD 处理都在主循环里靠<strong>轮询寄存器</strong>完成。</li>
+</ol>
+<hr>
+<h2>第 1 章　板子上的角色分工</h2>
+<div class="mermaid">
+flowchart TD
+    A["外置 PD 源 SW3526S<br/>真正的电源，广播它能提供哪几档电压"]
+    B["Type-C 插座<br/>CC1 / CC2 直连，中间没有 mux"]
+    C["FUSB302B（PD PHY）<br/>物理层：BMC 编解码 / CRC / 自动 GoodCRC"]
+    D["PY32F003（MCU，本程序）<br/>内容层：说什么话、怎么应答"]
+    E["160×80 ST7735 屏<br/>把 PDO 列表画给人看"]
+
+    A -->|"CC1 / CC2：PD 报文 + VBUS"| B
+    B --> C
+    C <-->|"I2C 双向：MCU 读写寄存器"| D
+    D -->|"SPI + DMA"| E
+</div>
+<h3>硬件连接要点</h3>
+<table>
+<thead>
+<tr>
+<th>连接</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CC1 / CC2</td>
+<td>FUSB302 <strong>直连</strong> Type-C 插座，中间没有任何 mux/开关。插哪一面就上哪根 CC</td>
+</tr>
+<tr>
+<td>VBUS</td>
+<td>送到 MCU 供电域（本工程整板由电脑 3V3 供电，VBUS 只作检测）</td>
+</tr>
+<tr>
+<td>I2C1</td>
+<td>MCU ↔ FUSB302，7 位地址 <code>0x22</code></td>
+</tr>
+<tr>
+<td>SPI1 + DMA</td>
+<td>MCU → ST7735 屏，DIV2 = 12MHz</td>
+</tr>
+<tr>
+<td>PA0</td>
+<td>FUSB302 的 <code>INT</code> 脚（接了 EXTI0 上升沿，但本程序不用它做处理）</td>
+</tr>
+<tr>
+<td>PA1</td>
+<td>按键（外部 3V3 上拉，<code>WaitForButton()</code> 里另补内部上拉）</td>
+</tr>
+</tbody>
+</table>
+<h3>一个非常重要的硬件事实</h3>
+<p><strong>FUSB302 由板上 3V3 供电，MCU 复位它并不掉电。</strong></p>
+<p>所以当你复位/重新烧录 MCU 时：</p>
+<ul>
+<li>FUSB302 里的 <code>Switches0</code>（Rd 下拉）、<code>Switches1</code>（TXCC 通道）、<br>
+  以及"上一轮谈好的合约状态"<strong>全部原样保留</strong>；</li>
+<li>源端那边也不知道你复位过，它认为"Sink 还挂着、合约还有效"，不会重播能力表。</li>
+</ul>
+<p><strong>这就是为什么开机必须打一枪 Hard Reset</strong>（详见第 3 章 ①）。</p>
+<hr>
+<h2>第 2 章　PD 协议最小必要知识</h2>
+<h3>2.1 术语表</h3>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>全称</th>
+<th>大白话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td>供电方</td>
+<td>外置的 SW3526S</td>
+</tr>
+<tr>
+<td>Sink</td>
+<td>用电方</td>
+<td>你这块板子</td>
+</tr>
+<tr>
+<td>PDO</td>
+<td>Power Data Object</td>
+<td>源端喊"我能给你这几档"，每档一个 32 位数</td>
+</tr>
+<tr>
+<td>RDO</td>
+<td>Request Data Object</td>
+<td>我方回答"我要第几档、要多少电流"</td>
+</tr>
+<tr>
+<td>Contract</td>
+<td>合约</td>
+<td>源端回 <code>PS_RDY</code> 之后，双方"签了合同"，VBUS 切到那一档并保持</td>
+</tr>
+<tr>
+<td>GoodCRC</td>
+<td>—</td>
+<td>每收到一条报文都要回的"我收到了"。<strong>FUSB302 硬件自动回</strong></td>
+</tr>
+<tr>
+<td>Soft Reset</td>
+<td>—</td>
+<td>"把你的能力表再念一遍"。不断电，只重播</td>
+</tr>
+<tr>
+<td>Hard Reset</td>
+<td>—</td>
+<td>"整个重来"。源端必须撤 VBUS 到 0V 再重建 5V，协议层和合约一起清零</td>
+</tr>
+<tr>
+<td>SOP</td>
+<td>Start of Packet</td>
+<td>报文起始序列。本工程只用默认的 <code>SOP</code>（不含 SOP'/SOP''）</td>
+</tr>
+</tbody>
+</table>
+<h3>2.2 报文长什么样</h3>
+<p>PD 报文（不含 CRC）结构：</p>
+<pre><code>+--------+------------------+---------------------------+
+| token  |  Header (2 字节)  |  数据对象 NDO × 4 字节     |
+| 1 字节  |  小端：低字节先发  |  小端：低字节先发          |
++--------+------------------+---------------------------+
+</code></pre>
+<p><strong>Header 的 16 个 bit 位域</strong>（这是全篇最重要的一张表）：</p>
+<table>
+<thead>
+<tr>
+<th>bit</th>
+<th>宽度</th>
+<th>名字</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4:0</td>
+<td>5</td>
+<td><code>msgType</code></td>
+<td>报文类型（见下表）</td>
+</tr>
+<tr>
+<td>5</td>
+<td>1</td>
+<td><code>dataRole</code></td>
+<td>0 = UFP(Sink)，1 = DFP(Source)</td>
+</tr>
+<tr>
+<td>7:6</td>
+<td>2</td>
+<td><code>specRev</code></td>
+<td>协议版本：0=Rev1.0，1=Rev2.0，2=Rev3.0</td>
+</tr>
+<tr>
+<td>8</td>
+<td>1</td>
+<td><code>powerRole</code></td>
+<td>0 = Sink，1 = Source</td>
+</tr>
+<tr>
+<td>11:9</td>
+<td>3</td>
+<td><code>msgId</code></td>
+<td>报文序号 0~7 循环，用来配对"请求-应答"</td>
+</tr>
+<tr>
+<td>14:12</td>
+<td>3</td>
+<td><code>numDataObjects</code></td>
+<td>后面跟几个 4 字节数据对象（NDO）</td>
+</tr>
+<tr>
+<td>15</td>
+<td>1</td>
+<td><code>extended</code></td>
+<td>扩展报文标志</td>
+</tr>
+</tbody>
+</table>
+<p><strong>常用的 <code>msgType</code></strong>：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>名字</th>
+<th>方向</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>Source_Capabilities</code></td>
+<td>SRC → SNK</td>
+<td>源端能力表（NDO = PDO 条数）</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>Request</code></td>
+<td>SNK → SRC</td>
+<td>我方申请（NDO = 1，内容是 RDO）</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>Accept</code></td>
+<td>双向</td>
+<td>受理</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>Reject</code></td>
+<td>双向</td>
+<td>拒绝</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>PS_RDY</code></td>
+<td>SRC → SNK</td>
+<td>电源已切好，合约生效</td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>Soft_Reset</code></td>
+<td>双向</td>
+<td>软复位</td>
+</tr>
+<tr>
+<td>15</td>
+<td><code>GoodCRC</code></td>
+<td>双向</td>
+<td>收到确认（硬件自动）</td>
+</tr>
+</tbody>
+</table>
+<h3>2.3 那条"28 毫秒"的红线</h3>
+<blockquote>
+<p><strong>源端发完 <code>Source_Capabilities</code>、并收到我们的 GoodCRC 之后，<br>
+会启动一个 24 ~ 30ms 的定时器（<code>tSenderResponse</code>）等我们的 <code>Request</code>。<br>
+超时没等到 → 源端直接发 Hard Reset，并把 VBUS 拉低重启。</strong></p>
+</blockquote>
+<p>抓包实测（同一次运行）：</p>
+<pre><code>SRC CAP  →  SNK GOOD CRC  →  +28.7ms  →  HRST
+源端重播 caps → 又是 GOOD CRC → 又是 +28.7ms HRST …… 无限循环
+</code></pre>
+<p>表现就是 VBUS 在 5V / 0V 之间来回跳。</p>
+<p><strong>所以</strong>：程序里回 Request 的动作必须"收到 caps 的同一轮立刻做"，<br>
+不能等到 UI 刷新那一路，更不能指望"等我把数据解析完再说"。</p>
+<h4>⚠️ 最容易翻车的地方：广播停了之后</h4>
+<p>这条红线在<strong>两种场景</strong>下的松紧程度完全不一样，务必分清：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>源端<strong>正在广播</strong>（上电 5s 内）</th>
+<th>源端<strong>广播停了之后</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>caps 从哪来</td>
+<td>它自己每 ~150ms 主动发一组</td>
+<td><strong>只有我们发 Soft Reset 催它</strong>才发</td>
+</tr>
+<tr>
+<td>我们发 Soft Reset 后多久收到 caps</td>
+<td>看运气（可能立刻，也可能等下一组）</td>
+<td><strong>7.5ms</strong>（它正等着呢，一催就回）</td>
+</tr>
+<tr>
+<td>我们有多少余量</td>
+<td>~150ms</td>
+<td><strong>只有 30ms</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>广播停之后，"发 Soft Reset → 收 caps → 回 Request"整条链只剩 30ms。</strong><br>
+这时候只要主循环被任何东西堵住超过 30ms，就必输。</p>
+<p>本工程真实踩过这个坑：发 Soft Reset 时界面要从 <code>LISTENING...</code> 变成
+<code>SOFT RESET 1/3</code>，触发了一次 <strong>35ms 的整屏重画</strong> —— 于是 caps 在 FIFO 里
+躺了 28.5ms 才被读走，Request 落地时<strong>迟到 0.738ms</strong>，源端当场 <code>HRST</code>。
+（详见 <code>README.md</code> §6g）</p>
+<p><strong>教训</strong>：界面刷新绝不能出现在"发 Soft Reset → 收 caps → 回 Request"
+这条链上，哪怕一次 35ms 的整屏重画都能要命。现在的做法是<strong>行级缓存</strong>
+（见第 4 章"工位 5"），一次状态更新最多只花 1 行 ≈ 4ms。</p>
+<blockquote>
+<p><strong>✅ 实测确认（2026-10-09 16:36 / 16:40）</strong>：两种场景都过了 ——
+- <strong>广播停之后</strong>（<code>iicnow.csv</code>）：<code>SOURCE CAP → SNK REQUEST</code> 只用 <strong>2.659ms</strong>
+  （余量 ~27ms），发完 Soft Reset 后的总线静默从 <strong>36.3ms 降到 5.9ms</strong>；
+- <strong>广播期内</strong>（<code>iicnow2.csv</code>）：<strong>2.701ms</strong>，而且<strong>根本不用发 Soft Reset</strong>
+  （"先听 250ms"直接听到 caps）。</p>
+<p>两份都和"广播期内"基准（2.662ms）一致。（详见 <code>README.md</code> §6g / §6g-补）</p>
+</blockquote>
+<hr>
+<h2>第 3 章　程序的三段时间线</h2>
+<div class="mermaid">
+flowchart LR
+    A["① 开机第一枪<br/>清掉上一轮的合约"] --> B["② 等按键<br/>屏上显示 PRESS KEY"]
+    B --> C["③ 五工位主循环<br/>先听后催 + 显示 PDO"]
+</div>
+<blockquote>
+<p>按键那一刻 = 日志时基零点 = 你开始抓包的时刻。</p>
+</blockquote>
+<h3>① 开机第一枪</h3>
+<p><strong>目的</strong>：清掉上一轮程序留下的合约（见第 1 章最后那段）。</p>
+<p><strong>执行顺序（不能换）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>步</th>
+<th>动作</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>pd.init(I2C1)</code></td>
+<td>软复位芯片 + 配好 <code>AUTO_CRC</code> / <code>specRev</code> / 中断屏蔽</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>startSinkToggle()</code></td>
+<td>让芯片自己"试"源端插在哪根 CC 上</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>pollAttach()</code></td>
+<td>每轮读 <code>Status1a.TOGSS</code>，落定后就知道是 CC1 还是 CC2（最多等 800ms）</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>selectCC(cc)</code></td>
+<td>把 Rd 下拉、<code>MEAS_CCx</code>（= RX 选线）、<code>TXCCx</code> 全钉到那根 CC</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>sendHardReset()</code></td>
+<td>写 <code>Control3.SEND_HARD_RESET = 1</code>，芯片自己组包发出</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么第 4 步必须在第 5 步之前</strong>：PD 报文必须从<strong>对的那根 CC</strong> 发出去。<br>
+早于 <code>selectCC()</code> 发送有可能发到空线上，等于对着空气喊话。</p>
+<p><strong>时序后果</strong>：源端收到 Hard Reset 后必须先把 VBUS 撤到 <code>vSafe0V</code>、再重建 <code>vSafe5V</code>，<br>
+实测低约 <strong>0.9 秒</strong>，然后才开始重播 <code>Source_Capabilities</code>。</p>
+<p>这段时间程序用 <code>PD_HR_RECOVER_MS = 2500ms</code> 的窗口<strong>屏蔽掉</strong>，<br>
+不让主循环误判成"线被拔了"。</p>
+<p><strong>重播的 caps 怎么处理</strong>：<strong>忽略</strong>。PDO 检测从按键那一刻才开始。</p>
+<h3>② 等按键</h3>
+<p>这一段程序<strong>什么都不做</strong>，只在 <code>WaitForButton()</code> 里盯着 PA1。</p>
+<p>按下瞬间记下 <code>g_log_t0</code> 作为日志时间零点，方便和抓包时间轴对齐。</p>
+<blockquote>
+<p><strong>踩过的坑</strong>：<code>Studio_GPIO_Init()</code> 把 PA1 配成"输入 + 无上下拉"，<br>
+完全依赖板上外部上拉。实测这里会悬空抖动 —— "等引脚变低"的自旋<br>
+时而立刻通过、时而永远卡住（上一轮就是卡死在这里）。<br>
+所以 <code>WaitForButton()</code> 里显式补了 <code>LL_GPIO_PULL_UP</code>，<br>
+并且<strong>不假定极性</strong>：先记下静止电平，再等它变化并保持 30ms。</p>
+</blockquote>
+<h3>③ 五工位主循环</h3>
+<p>按键后进入一个永不退出的 <code>for(;;)</code>。详见第 4 章。</p>
+<hr>
+<h2>第 4 章　主循环的五个工位</h2>
+<p>主循环像个流水线，每一圈按固定顺序走五个工位，每个工位有自己的"节拍"。</p>
+<div class="mermaid">
+flowchart TD
+    S["for(;;) 每一圈"] --> W1["工位 1　初始化重试　每 500ms"]
+    W1 --> W2["工位 2　attach / VBUS / 先听后催　每 10ms"]
+    W2 --> W3["工位 3　轮询 RX FIFO 找 caps　每 5ms"]
+    W3 --> W4["工位 4　读中断闩锁　每 20ms"]
+    W4 --> W5["工位 5　屏刷新 + 快照　最快 80ms"]
+    W5 --> S
+</div>
+<table>
+<thead>
+<tr>
+<th>工位</th>
+<th>节拍</th>
+<th>干什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. 初始化重试</strong></td>
+<td>500ms</td>
+<td><code>init</code> 失败过就在这里重试。<strong>注意：重试时不再软复位</strong></td>
+</tr>
+<tr>
+<td><strong>2. attach / VBUS / 先听后催</strong></td>
+<td>10ms</td>
+<td>状态机核心：有没有插上、VBUS 是不是真掉了、要不要发 Soft Reset</td>
+</tr>
+<tr>
+<td><strong>3. 轮询 RX FIFO</strong></td>
+<td>5ms</td>
+<td>看有没有收到报文；收到 caps 就<strong>当场回 Request</strong></td>
+</tr>
+<tr>
+<td><strong>4. 中断闩锁</strong></td>
+<td>20ms</td>
+<td>读 <code>INTERRUPTA/INTERRUPTB</code>，处理 Hard Reset 等事件</td>
+</tr>
+<tr>
+<td><strong>5. 屏刷新 + 快照</strong></td>
+<td>最快 80ms</td>
+<td>只在画面"脏了"或到点时才重画</td>
+</tr>
+</tbody>
+</table>
+<h3>工位 1：为什么重试时<strong>不能</strong>软复位</h3>
+<p><code>init(..., doReset=true)</code> 会写 <code>RESET.SW_RES</code>，那是<strong>整芯片软复位</strong>，<br>
+会把 <code>Switches0</code> 的 Rd 下拉一起撤掉。对源端来说，Rd 消失 = "Sink 拔出了"<br>
+→ 源端撤 VBUS、重置协商。</p>
+<p>所以：<strong>只有开机那一次 <code>init</code> 允许 <code>doReset=true</code></strong>，之后所有重试都传 <code>false</code>。</p>
+<h3>工位 2：状态机核心（"先听后催"）</h3>
+<div class="mermaid">
+stateDiagram-v2
+    [*] --> PH_LISTEN
+    PH_LISTEN --> PH_WAIT_SR : 听 250ms 没 caps，发一枪 Soft Reset
+    PH_WAIT_SR --> PH_WAIT_SR : 等 3000ms 还没 caps，再发一枪（最多 3 枪）
+    PH_WAIT_SR --> PH_GIVEUP : 3 枪打完还是没有
+    PH_LISTEN --> [*] : 收到 caps，画 PDO 列表
+    PH_GIVEUP --> [*] : 屏上画 0 PDO
+</div>
+<p>三个状态：</p>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>等待时长</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PH_LISTEN</code></td>
+<td>250ms</td>
+<td>按键后<strong>先安静听</strong>，看源端有没有正在广播</td>
+</tr>
+<tr>
+<td><code>PH_WAIT_SR</code></td>
+<td>3000ms</td>
+<td>已发 Soft Reset，等源端重播</td>
+</tr>
+<tr>
+<td><code>PH_LISTEN_LONG</code></td>
+<td>2500ms</td>
+<td>刚经历 Hard Reset / VBUS 恢复，源端要 ~1s 才重播，安静等</td>
+</tr>
+<tr>
+<td><code>PH_GIVEUP</code></td>
+<td>—</td>
+<td>终态，画 <code>0 PDO</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么"先听"只要 250ms</strong>：实测源端广播期间大约每 150ms 一组<br>
+<code>Source_Capabilities</code>（4872.6 / 5022.0 / 5171.4 …，每组 3 条、组内间隔 2ms），<br>
+所以 250ms 足够判断"有没有"。早期版本用 2000ms，导致业主抱怨<br>
+"按下约 2 秒后才发 Soft Reset"。</p>
+<p><strong>VBUS 判据为什么不能短</strong>：源端响应 Soft Reset 时会主动把 VBUS 拉低约 0.9 秒<br>
+（实测 3921→4786ms）。如果去抖窗口太短（旧版 3×20ms = 60ms），<br>
+就会被误判成"拔出"，于是清状态、重开 toggle，源端随后那 5 秒广播全部丢掉。<br>
+现在改成时间型：<strong>VBUS 连续低 <code>PD_DETACH_MS = 1500ms</code> 才算真拔出</strong>。</p>
+<p><strong>"掉过又回来"当什么处理</strong>：当成<strong>源端重启过</strong>（Soft Reset / Hard Reset 都会这样），<br>
+直接做一次 <code>pd.recover()</code> 复活 —— 因为实测 FUSB302 收到 Hard Reset 后<br>
+<code>Status1.RX_EMPTY</code> 恒为 1，不复位就永远收不到后面的 caps。</p>
+<h3>工位 3：收到 caps 之后必须"当场"回 Request</h3>
+<p>这是整个程序最紧张的一段。代码里 <code>sendRequest()</code> 就在"读到 caps"的<strong>同一个 <code>if</code> 分支</strong>里：</p>
+<pre><code>读到 Source_Capabilities
+  ├─ 存下 lastMsg、havePdo = true
+  ├─ pd.setSpecRev(msg.specRev)      ← 让硬件自动 GoodCRC 的报头合法
+  ├─ Log(L_CAP) / Log(L_CAPHDR)
+  └─ 立刻挑第一个 Fixed 档 → 拼 RDO → pd.sendRequest(rdo)   ← 28ms 红线
+</code></pre>
+<p><strong>挑档逻辑</strong>：遍历 <code>msg.pdo[]</code>，找 <code>(pdo &gt;&gt; 30) == 0</code>（类型 0 = Fixed）的第一条，<br>
+记下它的位置（从 1 起算）和原始值。如果一条 Fixed 都没有，就硬取第 1 条。</p>
+<p><strong>RDO 怎么拼</strong>（32 bit）：</p>
+<pre><code>rdo = (对象位置 &lt;&lt; 28) | (工作电流 &lt;&lt; 10) | 最大电流
+        ↑ 4 bit            ↑ 10 bit          ↑ 10 bit
+      第几档，从 1 起算     单位 10mA          单位 10mA
+</code></pre>
+<p>电流直接取源端该 PDO 里报的值（<code>pdoRaw &amp; 0x3FF</code>），为 0 时兜底 300（= 3A）。</p>
+<p><strong>为什么不用软件补发 GoodCRC</strong>：PD 给 GoodCRC 的窗口只有几十微秒，<br>
+等我们轮询到早就超时了，只会多出一条多余报文。<br>
+正确做法是让硬件自动回：<code>Switches1.AUTO_CRC = 1</code> <strong>且</strong> <code>Control0.AUTO_PRE = 0</code>。</p>
+<h3>工位 4：中断闩锁 —— 详见第 7 章</h3>
+<h3>工位 5：屏刷新</h3>
+<p><strong>内容真的变了才重画</strong>（2026-10-09 第六轮改的，原来是每 80ms 无条件重画一次）。</p>
+<p>判据是把"屏上画的是什么"打包成一个<strong>指纹</strong>（<code>struct UiFp</code>），和上一帧比：</p>
+<table>
+<thead>
+<tr>
+<th>指纹字段</th>
+<th>来自哪</th>
+<th>影响屏上什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>view</code></td>
+<td><code>havePdo</code> / <code>phase == PH_GIVEUP</code></td>
+<td>选哪个视图（下面那三个出口）</td>
+</tr>
+<tr>
+<td><code>cc</code></td>
+<td><code>g_diag.cc</code></td>
+<td>状态页 <code>WAIT ATTACH</code></td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td><code>g_uiPhase</code></td>
+<td>状态页 <code>LISTENING...</code> / <code>LISTEN (HR)...</code></td>
+</tr>
+<tr>
+<td><code>srTries</code></td>
+<td><code>g_uiSrTries</code></td>
+<td>状态页 <code>SOFT RESET n/3</code></td>
+</tr>
+<tr>
+<td><code>rdoAck</code></td>
+<td><code>g_rdoAck</code></td>
+<td>PDO 页第 1 条是否反白</td>
+</tr>
+<tr>
+<td><code>pdoCount</code></td>
+<td><code>lastMsg.pdoCount</code></td>
+<td>PDO 页画几行</td>
+</tr>
+<tr>
+<td><code>pdo[]</code></td>
+<td><code>lastMsg.pdo[i]</code></td>
+<td>PDO 页每行的内容</td>
+</tr>
+</tbody>
+</table>
+<p>指纹一致<strong>且</strong>没人置 <code>dirty</code> → 这一轮<strong>一条 SPI 都不发</strong>。</p>
+<p>三点要注意：</p>
+<ul>
+<li><strong><code>dirty</code> 一个都没少。</strong> 它现在是"强制重画"开关，各事件点（attach / 拔出 /
+  收到 caps / 发出 RDO / <code>PS_RDY</code> / <code>REJECT</code> / Soft Reset / Hard Reset 恢复…）
+  照旧置位 —— <strong>事件驱动的刷新一条都没被砍掉</strong>，砍掉的只是"没事也画"。
+  指纹是<strong>冗余的安全网</strong>：以后新增一处会改屏上内容却忘了置 <code>dirty</code> 的地方，
+  指纹会替它兜住。</li>
+<li><strong><code>PD_UI_MIN_MS = 80ms</code> 还在，但语义变了</strong>：它不再是"每 80ms 画一次"的周期，
+  而是<strong>两次重画之间的最小间隔</strong>（限速）。指纹只回答"要不要画"，
+  不回答"能不能立刻画"；协商期间 <code>dirty</code> 会被连发报文置得很密，有下限才不会
+  把主循环刷成"只顾画图、顾不上收报文"。被下限挡下时<strong>不更新指纹、也不清
+  <code>dirty</code></strong>，所以下一轮过了下限一定会补画 —— 不丢帧，只晚几十毫秒。</li>
+<li><strong><code>PD_UI_WATCHDOG_MS = 500ms</code> 是兜底（2026-10-09 第八轮改的）。</strong> 纯"指纹 +
+  dirty"有个死角：万一 SPI/DMA 偶发抽风把某行画坏了、而之后内容再没变过，
+  那行就永远错着（旧版靠 80ms 重画自愈）。留一条慢速兜底把自愈能力保住。</li>
+</ul>
+<p><strong>但它每次只作废一行</strong>（<code>g_rcWatchRow</code> 在 0..8 之间轮转），
+  <strong>不是整屏重画</strong>。原因见下面"行级缓存"——整屏重画一次要 35ms，
+  正好能吃掉源端等 Request 的那 24~30ms 窗口。</p>
+<p>代价：整屏自愈轮一遍从 2s 变成 9×500ms = 4.5s。看门狗本来只兜
+  "偶发毛刺"，4.5s 完全够。</p>
+<h4>行级缓存：为什么必须做（2026-10-09 第八轮新增）</h4>
+<p><strong>问题</strong>：<code>Row()</code> 原来是无条件刷。<code>DrawStatus()</code> 一次要写 9 个 160×10 矩形
+（标题条 + 6 行擦除 + 1 行文字），≈ 28.8KB SPI，实测 <strong>35~47ms</strong>。
+而 <code>st7735_send_data()</code> 是<strong>阻塞</strong>的（每行都 <code>st7735_dma_wait()</code> 等
+TC + BSY），所以这 35ms 里主循环<strong>完全不干活</strong> —— 连 FIFO 都不读。</p>
+<p><strong>这在广播停之后是致命的</strong>（原因见 2.3 那节）：caps 就在这 35ms 里躺进 FIFO，
+等醒过来已经过了 28.5ms，Request 迟到 0.738ms → <code>HRST</code>。</p>
+<p><strong>解法</strong>：给每一行存一份"上次画的内容"，一样就跳过。</p>
+<table>
+<thead>
+<tr>
+<th>缓存</th>
+<th>存什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>g_rcTxt[9][23]</code></td>
+<td>该行<strong>补齐到 23 列之后</strong>的文字（槽 8 给标题条，它没文字）</td>
+</tr>
+<tr>
+<td><code>g_rcFg[9]</code> / <code>g_rcBg[9]</code></td>
+<td>画这一行时用的前景 / 背景色</td>
+</tr>
+<tr>
+<td><code>g_rcOk[9]</code></td>
+<td>"屏幕上确实是这个内容"的标志</td>
+</tr>
+</tbody>
+</table>
+<p><code>Row()</code> 先比"补齐后的文字 + 前景色 + 背景色"，三者全同就<strong>直接 return</strong>，
+一个字节 SPI 都不发。</p>
+<p><strong>为什么可以存全文而不是哈希</strong>：RAM 上限 8KB，当前只用 ~4KB，
+9×(23+2+2+1) = 252B 完全放得下；存全文就不存在哈希碰撞导致的"漏画"。</p>
+<p><strong>为什么比的是"补齐后的文字"而不是"原文字"</strong>：行尾补空格本来就是为了
+<strong>覆盖</strong>上一帧，补齐后相同 ⇒ 像素完全相同 ⇒ 跳过是安全的。
+前景/背景色也必须一起比 —— PDO 列表的反白高亮<strong>只改配色、不改文字</strong>。</p>
+<p><strong>失效时机</strong>：</p>
+<ol>
+<li><strong>开机</strong>：<code>g_rcOk</code> 全 0 → 第一帧 9 个矩形全画；</li>
+<li><strong>看门狗</strong>：每 500ms 只作废<strong>一行</strong>（轮转 0..8）—— 不能一次全作废，
+   否则又变回 35ms 整屏重画，等于把刚修好的坑挖回来。</li>
+</ol>
+<p><strong>效果</strong>：发 Soft Reset 时真正变的只有第 3 行，所以一次状态更新
+<strong>35ms → ~4ms</strong>，Request 能在 caps 到达后 ~10ms 内发出去，余量 ~20ms。</p>
+<h4>开机必须"预铺整帧"（同一轮的补充）</h4>
+<p>行缓存有个<strong>冷启动死角</strong>：开机时 <code>ST7735_FillScreen()</code> 是<strong>整屏直灌像素、
+不走 <code>Row()</code></strong>，所以它一个缓存槽都不会填。如果开机只画了第 3/4/6 行，
+那么第 0/1/2/5/7 行 + 标题条的 <code>g_rcOk</code> 全是 0 ——
+<strong>按键之后主循环第一帧会把 9 个矩形一次全画 = 35.3ms</strong>。</p>
+<p>这一帧正好落在"先听 250ms"窗口的<strong>最开头</strong>，于是又出现一个新的失败窗口：</p>
+<table>
+<thead>
+<tr>
+<th>caps 落到线上的时刻 T（按键 = 0）</th>
+<th>我们读到它</th>
+<th>Request 发出</th>
+<th>源端截止 T+30ms</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[0, 1.5)</code></td>
+<td>被 <code>recover()</code> 的 <code>rxFlush()</code> 冲掉</td>
+<td>—</td>
+<td>—</td>
+<td>等下一组 ✅</td>
+</tr>
+<tr>
+<td><strong><code>[1.5, 9)</code></strong></td>
+<td><strong>~37ms（被 35ms 挡住）</strong></td>
+<td><strong>~38ms</strong></td>
+<td><code>T+30</code></td>
+<td><strong>迟到 → HRST ❌</strong></td>
+</tr>
+<tr>
+<td><code>[37, 250]</code></td>
+<td><code>T+5</code> 以内</td>
+<td><code>T+6</code></td>
+<td><code>T+30</code></td>
+<td>正常 ✅</td>
+</tr>
+</tbody>
+</table>
+<p>源端每 ~145ms 广播一组，踩中那 6.5ms 窗口的概率约 <strong>7%</strong> ——
+表现就是"<strong>偶尔按一次就失败</strong>"。</p>
+<p><strong>解法</strong>：开机就把整帧铺一遍（<code>HeaderBar()</code> + <code>Row(0,…)</code> + 把 1/2/5/7 行
+显式画成空白），把 9 个缓存槽全部填满。这样按键后第一帧
+<strong>只剩第 3、4 行真的变</strong> → <strong>35.3ms 降到 ~8ms</strong>，上表那行就永远不可能发生。</p>
+<p>代价：开机多烧 ~24ms SPI —— 在等按键之前，没有任何 deadline。</p>
+<p><strong><code>g_snap[]</code> 快照每轮都写</strong>（已从重画条件里移出来）。
+它只有几十字节 RAM 写入 + 一个 <code>now</code> 时间戳，成本可忽略；但它本来就是给
+OpenOCD 看的<strong>实时体检表</strong>（详见第 10 章），尤其 <code>[30]</code>/<code>[31]</code> 那两个
+"中断进入次数 / 心跳顶事次数"计数器 —— 判"中断到底有没有在干活"全靠它们。
+要是跟着重画一起变成"几十秒才更新一次"，这套诊断就废了。</p>
+<p>三个出口，<strong>不会出现第四种画面</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th>画什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>havePdo</code></td>
+<td>PDO 列表（第 1 条在 <code>PS_RDY</code> 后反白高亮）</td>
+</tr>
+<tr>
+<td><code>phase == PH_GIVEUP</code></td>
+<td><code>0 PDO</code>（红字）</td>
+</tr>
+<tr>
+<td>其它</td>
+<td>状态视图（<code>WAIT ATTACH</code> / <code>LISTENING...</code> / <code>SOFT RESET n/3</code>）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>视图切换必须把上一帧完整盖掉。</strong> <code>DrawPdoList()</code> 会把 8 行<strong>全部</strong>写满
+（PDO 行 + 末尾补空行），而 <code>DrawStatus()</code> 只用第 0 行和第 3 行。
+所以 <code>DrawStatus()</code> 现在会先把第 1/2/4/5/6/7 行擦成黑色再画状态文字 ——
+否则从 PDO 列表切回状态页（唯一路径是拔出）时，屏上会同时出现
+<code>WAIT ATTACH</code> 和上一帧的 <code>2 FIX 9.0V 3.00A 27W</code>。
+开机那两行 <code>PRESS KEY</code> / <code>waiting button</code> 残留也是同一个原因。</p>
+</blockquote>
+<hr>
+<h2>第 5 章　一次完整 PD 协商的全过程</h2>
+<h3>5.1 时序图</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant SNK as SINK（本程序）
+    participant SRC as SOURCE（SW3526S）
+
+    SNK->>SRC: ① Soft Reset　请把你的能力表重播一遍
+    SRC->>SNK: ② Accept　收到
+    SRC->>SNK: ③ Source_Capabilities　我能给这几档（PDO）
+    SNK->>SRC: ④ GoodCRC　FUSB302 硬件自动回，微秒级
+    SNK->>SRC: ⑤ Request（RDO）　我要第 1 档 5V —— 必须 28ms 内
+    SRC->>SNK: ⑥ Accept　受理
+    SRC->>SNK: ⑦ PS_RDY　电源已切好 → 屏上第 1 条反白高亮
+</div>
+<h3>5.2 每一步在代码里对应什么</h3>
+<table>
+<thead>
+<tr>
+<th>步</th>
+<th>谁做的</th>
+<th>代码位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>①</td>
+<td>主循环工位 2</td>
+<td><code>pd.sendControl(PD_CTRL_SOFT_RESET)</code></td>
+</tr>
+<tr>
+<td>② ③</td>
+<td>源端主动发，我们只能被动收</td>
+<td>工位 3 的 <code>pd.pollSourceCapabilities(msg)</code></td>
+</tr>
+<tr>
+<td>④</td>
+<td><strong>FUSB302 硬件</strong></td>
+<td>无需代码，靠 <code>Switches1.AUTO_CRC=1</code> + <code>Control0.AUTO_PRE=0</code></td>
+</tr>
+<tr>
+<td>⑤</td>
+<td>主循环工位 3</td>
+<td><code>pd.sendRequest(rdo)</code></td>
+</tr>
+<tr>
+<td>⑥ ⑦</td>
+<td>源端主动发</td>
+<td>库把被跳过的 msgType 记在 <code>lastPeerMsgType()</code>，主循环据此判断</td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 收报文：<code>pollSourceCapabilities()</code> 怎么拆包</h3>
+<p>FUSB302 的 RX FIFO 里，一条报文的字节序是：</p>
+<pre><code>token(1) + Header(2, 小端) + 数据对象(NDO × 4) + CRC(4)
+</code></pre>
+<p>库里的做法：</p>
+<ol>
+<li>先看 <code>Status1.RX_EMPTY</code>，空了就返回 false；</li>
+<li><code>fetchMessage()</code> 按上面格式逐字节 <code>popFifo()</code> 拆出来；</li>
+<li><strong>如果是 GoodCRC 就跳过</strong>（<code>continue</code>），因为那是我们自己发出去的确认；</li>
+<li>记下这条被跳过的 <code>msgType</code>（可能是 <code>ACCEPT</code>/<code>PS_RDY</code>/<code>REJECT</code>）；</li>
+<li>如果是 <code>Source_Capabilities</code>（<code>msgType == 1</code> 且 <code>NDO &gt; 0</code>）→ 返回 true；</li>
+<li>其它报文忽略，继续看下一条。</li>
+</ol>
+<p><strong>为什么要记 <code>lastPeerMsgType()</code></strong>：<code>ACCEPT</code> / <code>PS_RDY</code> / <code>REJECT</code> 都是控制报文，<br>
+会被第 3 步跳过丢掉。但我们恰恰需要靠它判断"第 1 档到底申请成功没有"。<br>
+所以库额外把"最后一条被跳过的 msgType"存下来给上层用。</p>
+<p>主循环里的判断：</p>
+<table>
+<thead>
+<tr>
+<th>收到的</th>
+<th>含义</th>
+<th>动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ACCEPT</code>(0x03)</td>
+<td>只是受理，电源还没切</td>
+<td>继续等</td>
+</tr>
+<tr>
+<td><code>PS_RDY</code>(0x06)</td>
+<td>电源已切到申请的档位</td>
+<td><code>g_rdoAck = true</code> → 第 1 条反白高亮</td>
+</tr>
+<tr>
+<td><code>REJECT</code>(0x04)</td>
+<td>被拒</td>
+<td><code>g_rdoAck = false</code> → 保持普通配色</td>
+</tr>
+</tbody>
+</table>
+<p>读到就 <code>clearLastPeerMsgType()</code> 消费掉，否则同一条应答会在后面每一轮里被反复处理。</p>
+<h3>5.4 PDO 怎么解码成"5.0V 3.00A 15W"</h3>
+<p>PDO 的 bit31:30 是类型：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>类型</th>
+<th>电压字段</th>
+<th>电流/功率字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Fixed</td>
+<td>bit29:10 × 50mV</td>
+<td>bit9:0 × 10mA</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Battery</td>
+<td>max V = bit29:20 × 50mV，min V = bit19:10 × 50mV</td>
+<td>bit9:0 × 250mW</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Variable</td>
+<td>max V = bit29:20 × 50mV，min V = bit19:10 × 50mV</td>
+<td>bit9:0 × 10mA</td>
+</tr>
+<tr>
+<td>3</td>
+<td>APDO</td>
+<td>看子类型，PPS 是 max V = bit24:17 × 100mV，min V = bit16:8 × 100mV</td>
+<td>PPS：bit6:0 × 50mA</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>PPS 是什么</strong>：Programmable Power Supply，PD3.0 的可调压档位（比如 3.3~11V 连续可调）。<br>
+FUSB302B 虽然标称 PD2.0 PHY，但<strong>可以支持 PD3.0 / PPS</strong> ——<br>
+关键点是 <code>Switches1.SPECREV</code> 只管"硬件自动 GoodCRC 的报头"，<br>
+而我们自己组的报头用的是另一个变量 <code>m_hdrRev</code>，不受它限制。</p>
+</blockquote>
+<p>屏上每行的格式：</p>
+<pre><code>1 FIX 5.0V 3.00A 15W          ← 拿到 caps 后的列表（第 1 条反白 = 申请成功）
+2 FIX 9.0V 3.00A 27W
+3 FIX 12.0V 3.00A 36W
+4 PPS 3.3-11.0V 3.00A
+0 PDO                          ← 催满 3 枪 Soft Reset 还是没等到 caps
+</code></pre>
+<hr>
+<h2>第 6 章　FUSB302 寄存器配置逐条解释</h2>
+<p><code>pd.init()</code> 的 10 个步骤，<strong>顺序有意义，不能乱</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>步</th>
+<th>寄存器</th>
+<th>写入值</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>RESET</code> (0x0C)</td>
+<td><code>SW_RES</code></td>
+<td>整芯片软复位。<strong>之后必须等 2ms</strong>，否则后续写入会被丢弃</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>DEVICE_ID</code> (0x01)</td>
+<td>读</td>
+<td>确认 I2C 通得上</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>POWER</code> (0x0B)</td>
+<td><code>0x0F</code></td>
+<td>打开全部电源域（测量块、接收器、振荡器）</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>SWITCHES0</code> (0x02)</td>
+<td><code>PDWN1｜PDWN2｜MEAS_CC1</code></td>
+<td>两根 CC 都挂 Rd 下拉（纯 Sink），先假定 CC1</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>SWITCHES1</code> (0x03)</td>
+<td><code>AUTO_CRC｜TXCC1｜SPECREV</code></td>
+<td>开硬件自动 GoodCRC，先假定从 CC1 发</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>CONTROL0</code> (0x06)</td>
+<td><code>C0_BASE</code></td>
+<td><strong><code>AUTO_PRE = 0</code></strong>（见下面第 6.1 节的坑）</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>CONTROL3</code> (0x09)</td>
+<td><code>0x00</code></td>
+<td>关掉自动重发，诊断阶段要"发几次就是几次"</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>MASK1/MASKA/MASKB</code></td>
+<td><code>0xEF / 0xEF / 0xFF</code></td>
+<td>放开 <code>I_CRC_CHK</code> 与 <code>I_RETRYFAIL</code>，让 INT 脚能触发</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>SLICE</code> (0x05)</td>
+<td><code>0x60</code></td>
+<td>SDAC_HYS=01（迟滞 85mV），SDAC=0x20</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>CONTROL1</code> / <code>CONTROL0</code></td>
+<td>冲 FIFO</td>
+<td><code>RX_FLUSH</code> / <code>TX_FLUSH</code> 写完<strong>立刻写回不含 flush 位的值</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>6.1 三个致命的寄存器坑</h3>
+<h4>坑一：<code>AUTO_PRE</code> 与自动 GoodCRC 的关系（最关键）</h4>
+<p>数据手册 "PD Automatic Receive GoodCRC" 写得很清楚：</p>
+<blockquote>
+<p>自动回 GoodCRC 的条件是 <strong><code>AUTO_CRC = 1</code> 且 <code>AUTO_PRE = 0</code></strong>。</p>
+</blockquote>
+<p>早期版本 <code>Control0</code> 写的是 <code>0x0E</code>（<code>AUTO_PRE = 1</code>），结果：</p>
+<ul>
+<li>芯片收到好报文时改去"从 TX FIFO 自动起发"，<strong>硬件自动 GoodCRC 反而被关掉了</strong>；</li>
+<li>于是只能软件补发 GoodCRC —— 但那个窗口只有几十微秒，<strong>补不回来</strong>；</li>
+<li>源端每条 <code>Source_Capabilities</code> 重发 3 次，最后直接 Hard Reset。</li>
+</ul>
+<p><strong>现在 <code>Control0 = 0x0C</code>（<code>AUTO_PRE = 0</code>）</strong>，硬件自动 GoodCRC 才真正生效。</p>
+<h4>坑二：发送必须写 <code>Control0.TX_START</code></h4>
+<p>按官方数据手册，发送流程是：</p>
+<ol>
+<li>确认 <code>Status1.TX_EMPTY = 1</code>；</li>
+<li>写 <code>0x43</code>（FIFOS）写入 token + 数据；</li>
+<li><strong>写 <code>Control0.TX_START = 1</code></strong>（bit0，自清除）← 这一步不能漏；</li>
+<li>等 <code>Interrupta</code> 的 <code>I_TXSENT</code>。</li>
+</ol>
+<p>早期版本靠 FIFO 末字节的 <code>0xA1</code>（<code>TXON</code> 命令）触发，那是第三方工程的写法，<br>
+<strong>在这块芯片上不生效</strong>。抓包证据：<code>Control0</code> 全程只出现过 <code>0x00 / 0x0C / 0x4C</code>，<br>
+<strong>从来没写过 <code>TX_START</code></strong>；逻辑分析仪在 CC 线上也只见源端的报文，<br>
+看不到任何 sink 报文 —— 包压进 FIFO 了但根本没启动发送。</p>
+<h4>坑三：<code>Switches1.SPECREV</code> 不能填 3.0</h4>
+<p>FUSB302B 是 PD2.0 PHY，手册对 bits[6:5] 的 <code>10</code> / <code>11</code> 明写 <strong>"Do Not Use"</strong>。<br>
+填 <code>10</code>（Rev3.0）会让<strong>硬件自动 GoodCRC 的报头非法</strong>，源端直接丢掉。</p>
+<blockquote>
+<p>注意区分两个"版本号"：</p>
+<ul>
+<li><code>Switches1.SPECREV</code>（硬件用）→ 只能 Rev1.0 / Rev2.0</li>
+<li><code>m_hdrRev</code>（我们自己组报头用）→ 可以到 Rev3.0</li>
+</ul>
+<p>这就是为什么 PPS / PD3.0 能用，而自动 GoodCRC 也不会坏。</p>
+</blockquote>
+<hr>
+<h2>第 7 章　中断处理</h2>
+<h3>7.1 结论先说：这个程序基本不用中断</h3>
+<p>硬件上 FUSB302 的 INT 引脚是<strong>接了的</strong>：PA0，配了 EXTI0 上升沿，NVIC 也开了。<br>
+但是 —— <strong>ISR 里只清了个标志位，一行 PD 代码都没有</strong>：</p>
+<pre><code class="language-c">void EXTI0_1_IRQHandler(void)
+{
+  if (LL_EXTI_IsActiveFlag(LL_EXTI_LINE_0) != 0U) { LL_EXTI_ClearFlag(LL_EXTI_LINE_0); }
+  if (LL_EXTI_IsActiveFlag(LL_EXTI_LINE_1) != 0U) { LL_EXTI_ClearFlag(LL_EXTI_LINE_1); }
+}
+</code></pre>
+<p>所有真正的 PD 处理都在主循环的<strong>工位 4</strong> 里靠<strong>轮询</strong>完成。</p>
+<div class="mermaid">
+flowchart LR
+    A["事件发生<br/>CC 上有动作"] --> B["闩锁置位<br/>寄存器记住它"]
+    B --> C["20ms 轮询<br/>MCU 读到非 0"]
+    C --> D["读即清零<br/>然后分派处理"]
+    D -.-> A
+</div>
+<h3>7.2 为什么"轮询"反而更好用</h3>
+<p>关键在于 FUSB302 的中断寄存器是 <strong>R/C（Read-to-Clear）</strong> 类型：<strong>读一次，它自己就清零了</strong>。</p>
+<p>这带来两个好处：</p>
+<ol>
+<li><strong>天然就是"边沿检测"</strong>。比如 <code>INTERRUPTA.bit0 = I_HARDRST</code>，读一次就清了，<br>
+   绝不会"一直挂着导致每轮都重复触发"。</li>
+<li><strong>不依赖 ISR 的实时性</strong>。即使 20ms 才看一眼，只要这期间发生过事件，<br>
+   闩锁位一定还在那儿等着。</li>
+</ol>
+<h3>7.3 中断寄存器位表</h3>
+<p><strong><code>INTERRUPTA</code> (0x3E)</strong> —— 全部 R/C：</p>
+<table>
+<thead>
+<tr>
+<th>位</th>
+<th>名字</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x80</td>
+<td><code>I_OCP_TEMP</code></td>
+<td>过流 / 过温</td>
+</tr>
+<tr>
+<td>0x40</td>
+<td><code>I_TOGDONE</code></td>
+<td>toggle 探测完成</td>
+</tr>
+<tr>
+<td>0x20</td>
+<td><code>I_SOFTFAIL</code></td>
+<td>软件重试失败</td>
+</tr>
+<tr>
+<td>0x10</td>
+<td><code>I_RETRYFAIL</code></td>
+<td>自动重发 3 次都没拿到对端 GoodCRC</td>
+</tr>
+<tr>
+<td><strong>0x08</strong></td>
+<td><strong><code>I_HARDSENT</code></strong></td>
+<td><strong>我方 Hard Reset 成功发上线了</strong></td>
+</tr>
+<tr>
+<td>0x04</td>
+<td><code>I_TXSENT</code></td>
+<td>我方报文拿到了对端 GoodCRC</td>
+</tr>
+<tr>
+<td>0x02</td>
+<td><code>I_SOFTRST</code></td>
+<td>收到 Soft Reset</td>
+</tr>
+<tr>
+<td><strong>0x01</strong></td>
+<td><strong><code>I_HARDRST</code></strong></td>
+<td><strong>收到 Hard Reset</strong>（复活触发点）</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>INTERRUPTB</code> (0x3F)</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>位</th>
+<th>名字</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x01</td>
+<td><code>I_GCRCSENT</code></td>
+<td>芯片回过 GoodCRC（= 它收到过有效报文）</td>
+</tr>
+</tbody>
+</table>
+<p>程序每 20ms 把 <code>INTERRUPTA</code>、<code>INTERRUPTB</code>、<code>STATUS0A</code> 各读一次，<br>
+非零就记一条 <code>L_INTA</code> / <code>L_INTB</code> 日志，同时累加到 <code>g_diag.intaAcc / intbAcc</code>。</p>
+<h3>7.4 一个容易踩的坑：为什么用 <code>INTERRUPTA.bit0</code> 而不是 <code>Status0a.HARDRST</code></h3>
+<p>这两个都能表示"收到 Hard Reset"，但<strong>性质完全不同</strong>：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>Status0a.HARDRST</code></th>
+<th><code>INTERRUPTA.bit0</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>类型</td>
+<td><strong>状态位</strong></td>
+<td><strong>R/C 闩锁</strong></td>
+</tr>
+<tr>
+<td>清零方式</td>
+<td>只有 <code>PD_RESET</code> 能清</td>
+<td>读一次自动清零</td>
+</tr>
+<tr>
+<td>当触发条件会怎样</td>
+<td>整个 Hard Reset 期间一直为 1，<strong>每 20ms 触发一次复位</strong>，把 FIFO 反复冲掉</td>
+<td>天然只触发一次</td>
+</tr>
+</tbody>
+</table>
+<p>所以程序里：</p>
+<ul>
+<li><strong><code>INTERRUPTA.bit0</code> 当动作触发点</strong>；</li>
+<li><code>Status0a.HARDRST</code> 只当作诊断值记录（<code>g_snap[27]</code> / <code>g_snap[29]</code>）。</li>
+</ul>
+<p>另外实测发现：<strong>即使把 <code>MASKA.bit0</code> 置 1（屏蔽 INT 引脚），这个闩锁照样会置位</strong><br>
+（抓包 4000.484ms 读到 <code>INTERRUPTA = 0x01</code>）。所以我们只轮询也能拿到，不必依赖 INT 脚。</p>
+<hr>
+<h2>第 8 章　Hard Reset 的坑与"复活"</h2>
+<p>这是整个项目里最难、也最值得记住的一段。</p>
+<h3>8.1 现象</h3>
+<p>源端发完 Hard Reset 之后，我们的 <code>Status1.RX_EMPTY</code> <strong>恒为 1</strong>，<br>
+一条报文都进不了 RX FIFO。源端随后那 5 秒的 caps 广播，我们<strong>全部丢掉</strong>。</p>
+<p>这就是当初"5 秒后再按按键，发了 Soft Reset 也读不到 PDO"的直接原因。</p>
+<h3>8.2 原因</h3>
+<p><strong>FUSB302 收到 Hard Reset 之后，内部的 PD 收发状态机就锁死了。</strong><br>
+这是芯片行为，不是 bug。</p>
+<h3>8.3 解法</h3>
+<p>写一次 <code>Reset.PD_RESET</code>（bit1）。它只复位 PD 收发逻辑、<strong>不动 I2C 寄存器内容</strong>，<br>
+所以之后必须把我们改过的收发相关寄存器再写一遍。</p>
+<p>两家参考驱动都这么做：</p>
+<table>
+<thead>
+<tr>
+<th>参考实现</th>
+<th>函数</th>
+<th>注释原文</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chromium <code>FUSB302-master</code></td>
+<td><code>pd_reset()</code></td>
+<td><em>"bring the FUSB302 out of reset after Hard Reset"</em></td>
+</tr>
+<tr>
+<td>pdsink</td>
+<td><code>hr_cleanup()</code> → <code>fusb_pd_reset()</code></td>
+<td><em>"Cleanup internal states after hard reset received </em><em>or sent</em><em>."</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意 pdsink 那句里的 "or sent"</strong> —— 我们<strong>主动发出</strong> Hard Reset 之后同样需要清理。</p>
+<h3>8.4 程序里三处会调 <code>pd.recover()</code></h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>时机</th>
+<th>触发条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>收到 Hard Reset</td>
+<td><code>INTERRUPTA.bit0 = I_HARDRST</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>VBUS "掉过又回来"</td>
+<td>说明源端重启过</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>按键之后</strong></td>
+<td>因为开机那一枪是我们自己发的</td>
+</tr>
+</tbody>
+</table>
+<p>第 3 处<strong>不放在发完 HR 立刻</strong>，是因为立刻写 <code>PD_RESET</code> 有可能打断<br>
+刚发出去的那一条 Hard Reset 报文。</p>
+<h3>8.5 <code>pdReset()</code> 内部的顺序</h3>
+<pre><code>1. 写 RESET.PD_RESET          复位 PD 收发逻辑
+2. m_msgId = 0                 PD 规范：Hard Reset 后双方 MessageID 都要归零
+3. rxFlush() + txFlush()       丢掉复位前残留的半包 / 垃圾
+4. 重写 CONTROL0 / CONTROL1 / CONTROL3 / SLICE
+5. selectCC(m_cc)              ★ 重钉 CC 路由
+</code></pre>
+<p><strong>第 5 步不能少</strong>。因为 <code>MEAS_CCx</code> 同时就是 <strong>RX 的选线开关</strong>，<br>
+不重钉的话 RX 依然收不到东西。</p>
+<h3>8.6 ⚠️ 实测：<code>recover()</code> <strong>不保证一次就救回来</strong>（2026-10-09 第八轮）</h3>
+<p>第八轮的抓包（<code>pdbad.csv</code> + <code>iicbad.csv</code>）里出现了一次"救不回来"：</p>
+<table>
+<thead>
+<tr>
+<th>时刻（绝对）</th>
+<th>事件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2952.812ms</td>
+<td>源端 <code>HRST</code>（它等 Request 超时了）</td>
+</tr>
+<tr>
+<td>2954.078ms</td>
+<td>我们读到 <code>INTERRUPTA=0x01</code>(I_HARDRST) + <code>STATUS0A=0x0D</code></td>
+</tr>
+<tr>
+<td><strong>2954.356ms</strong></td>
+<td><strong>第 1 次 <code>recover()</code></strong>（<code>W44:0C 02</code> …）—— 反应很快，~1.3ms</td>
+</tr>
+<tr>
+<td>2954.4 → 3858.0ms</td>
+<td><strong>900ms 里 FIFO 读（<code>0x43</code>）一次都没有</strong> ← RX 还是死的</td>
+</tr>
+<tr>
+<td><strong>3858.043ms</strong></td>
+<td><strong>第 2 次 <code>recover()</code></strong></td>
+</tr>
+<tr>
+<td>3948.184ms</td>
+<td>源端 caps 终于进 FIFO，我们读到了 ✓</td>
+</tr>
+</tbody>
+</table>
+<p>也就是说：<strong>收到 HRST 后 <code>recover()</code> 确实会被立刻调用</strong>（第 1 处触发点没问题），
+但<strong>第 1 次没能把 RX 救回来</strong>，要等到第 2 次才活。</p>
+<p><strong>后果</strong>：一次协商超时 = 整场报废。源端在 15.6s 里重播了 <strong>237 条
+<code>SOURCE CAP</code></strong>，而我们只回了 <strong>3 条 <code>GOOD CRC</code></strong>、<strong>0 条 <code>REQUEST</code></strong>
+（<code>SNK: GOOD CRC</code> 那 3 条还是 FUSB302 硬件自动回的）。</p>
+<p><strong>当前判断</strong>：第八轮的行级缓存改完之后，源端<strong>不应该再发 HRST</strong>
+（Request 赶得上了），所以这条路径正常情况下走不到。
+<strong>如果烧录后仍偶发 <code>HRST</code></strong>，下一步就该在这里加固：
+<code>recover()</code> 之后校验 <code>Status1.RX_EMPTY</code>，失败就再来一次（或重挂 CC）。</p>
+<blockquote>
+<p><strong>✅ 2026-10-09 16:36 复测：整场没触发。</strong>
+<code>iicnow.csv</code> 里 <code>RESET(0x0C)</code> 只写了 <strong>1</strong> 次（init 那次），
+236 次突发读里 <code>INTERRUPTA</code> <strong>全是 <code>0x00</code></strong> —— 一次 Hard Reset 都没收到。
+也就是说：<strong>只要 Request 不迟到，源端就不会发 HRST，也就永远走不到这个坑里。</strong>
+这条先搁置，但代码里那个 <code>recover()</code> 路径保留不动（它是最后一道保险）。</p>
+</blockquote>
+<hr>
+<h2>第 9 章　关键常量速查</h2>
+<p>看代码时对着这张表，基本就懂了一半。</p>
+<table>
+<thead>
+<tr>
+<th>常量</th>
+<th>值</th>
+<th>为什么是这个数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PD_RX_POLL_MS</code></td>
+<td>5ms</td>
+<td>收 caps 的轮询节拍。必须够快，回 Request 的窗口只有 28ms</td>
+</tr>
+<tr>
+<td><code>PD_ATTACH_POLL_MS</code></td>
+<td>10ms</td>
+<td>查 VBUS / TOGSS 的节拍</td>
+</tr>
+<tr>
+<td><code>PD_INT_POLL_MS</code></td>
+<td>20ms</td>
+<td>读中断闩锁的节拍</td>
+</tr>
+<tr>
+<td><code>PD_UI_MIN_MS</code></td>
+<td>80ms</td>
+<td>两次重画之间的<strong>最小间隔</strong>（限速）。内容不变就不画，它只压"变太频繁"</td>
+</tr>
+<tr>
+<td><code>PD_UI_WATCHDOG_MS</code></td>
+<td>500ms</td>
+<td>兜底自愈：内容一直不变也每 500ms <strong>刷一行</strong>（轮转 0..8）。<strong>不是整屏</strong> —— 整屏要 35ms，会吃掉等 Request 的窗口</td>
+</tr>
+<tr>
+<td><code>PD_CFG_RETRY_MS</code></td>
+<td>500ms</td>
+<td><code>init</code> 失败后的重试间隔</td>
+</tr>
+<tr>
+<td><code>PD_LISTEN_MS</code></td>
+<td>250ms</td>
+<td>按键后"先听"的时长。源端每 ~150ms 广播一组，够判有无</td>
+</tr>
+<tr>
+<td><code>PD_SR_WAIT_MS</code></td>
+<td>3000ms</td>
+<td>发完 Soft Reset 后等源端重播的时间</td>
+</tr>
+<tr>
+<td><code>PD_SR_MAX</code></td>
+<td>3</td>
+<td>最多催 3 枪，之后进 <code>PH_GIVEUP</code> 画 <code>0 PDO</code></td>
+</tr>
+<tr>
+<td><code>PD_LISTEN_AFTER_HR_MS</code></td>
+<td>2500ms</td>
+<td>Hard Reset 后源端要先撤 VBUS ~0.9s、再过 ~1s 才重播</td>
+</tr>
+<tr>
+<td><code>PD_HR_RECOVER_MS</code></td>
+<td>2500ms</td>
+<td>同上。这段 VBUS 低是<strong>预期</strong>的，不能判成拔出</td>
+</tr>
+<tr>
+<td><code>PD_DETACH_MS</code></td>
+<td>1500ms</td>
+<td>VBUS 连续低这么久才算真拔出。<strong>不能短</strong></td>
+</tr>
+<tr>
+<td><code>PD_DETACH_HOLD_MS</code></td>
+<td>300ms</td>
+<td>判拔出后静置这么久才允许重新 attach</td>
+</tr>
+<tr>
+<td><code>PD_BOOT_ATTACH_MS</code></td>
+<td>800ms</td>
+<td>开机探 attach 的上限，超时就先跳过</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>第 10 章　没有串口，怎么看内部状态</h2>
+<p>这个工程<strong>故意不用串口</strong>，PDO 全画在屏上。但调试时总得看更多东西，<br>
+所以有两套"暗门"。</p>
+<h3>10.1 <code>g_log[]</code> —— 64 条循环日志</h3>
+<p>每条 8 字节：</p>
+<pre><code>[0..3] 时间戳（ms，小端）
+[4]    日志码
+[5]    参数 a0
+[6]    参数 a1
+[7]    保留 0
+</code></pre>
+<p>用 OpenOCD / DAPLink 直接 dump 内存就能看到完整时间线。</p>
+<p><strong>常用日志码</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>码</th>
+<th>名字</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>L_BOOT</code></td>
+<td>开机</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>L_LCD</code></td>
+<td>屏初始化完成</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>L_INIT</code></td>
+<td><code>pd.init</code> 成功 / 失败</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>L_DEVID</code></td>
+<td>读到的 Device ID</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>L_ATTACH</code></td>
+<td>探测到 attach（arg0 = CC1/CC2；<strong>0 表示开机没探到</strong>）</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>L_SELCC</code></td>
+<td><code>selectCC</code> 结果</td>
+</tr>
+<tr>
+<td>14</td>
+<td><code>L_CAP</code></td>
+<td>收到 caps（arg0 = 条数，arg1 = specRev）</td>
+</tr>
+<tr>
+<td>20</td>
+<td><code>L_REATTACH</code></td>
+<td>模拟拔出 / 插入</td>
+</tr>
+<tr>
+<td>23</td>
+<td><code>L_HRST</code></td>
+<td>收到 Hard Reset</td>
+</tr>
+<tr>
+<td>24</td>
+<td><code>L_RECOVER</code></td>
+<td>做过一次 <code>PD_RESET</code> 复活</td>
+</tr>
+<tr>
+<td>25</td>
+<td><code>L_RDO</code></td>
+<td>发出 Request</td>
+</tr>
+<tr>
+<td>26</td>
+<td><code>L_PSRDY</code></td>
+<td>收到 PS_RDY / REJECT</td>
+</tr>
+<tr>
+<td><strong>27</strong></td>
+<td><strong><code>L_HRSND</code></strong></td>
+<td><strong>我方主动发 Hard Reset</strong>（arg0 = 写寄存器成功，arg1 = 用的 CC）</td>
+</tr>
+<tr>
+<td>28</td>
+<td><code>L_INTA</code></td>
+<td><code>INTERRUPTA</code> 值（含 <code>0x08</code> = <code>I_HARDSENT</code>）</td>
+</tr>
+<tr>
+<td>29</td>
+<td><code>L_INTB</code></td>
+<td><code>INTERRUPTB</code> 值</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>时间戳断点</strong>：开机那几行日志（含 <code>L_HRSND</code>）的时间戳是<strong>相对 MCU 上电的绝对毫秒</strong>；<br>
+按键之后才变成相对按键。日志里会有一个明显的"时间跳变"，那是正常的，不是 bug。</p>
+</blockquote>
+<h3>10.2 <code>g_snap[32]</code> —— 内存快照</h3>
+<p>主循环<strong>每轮</strong>把关键变量抄进去（2026-10-09 第六轮之前是"UI 每次刷新时"抄，
+但那时 UI 每 80ms 无条件刷一次；现在改成"内容不变不重画"之后，如果还跟着
+重画走，屏不动的时候快照就一直是旧的 —— 所以移出来改成每轮都写）。
+屏幕上看不出来的东西，<code>mdw &amp;g_snap 8</code> 一读就有。</p>
+<blockquote>
+<p>为什么这两个计数器必须每轮更新：判"中断到底有没有在干活"<strong>只看</strong>它们。
+正常情况 <code>[31]</code> 应恒为 0（中断先到，心跳根本轮不上）；若 <code>[31]</code> 跟着 <code>[30]</code>
+一起涨 → 说明边沿没来、心跳在硬扛 → 回头查 PA0 上拉 / EXTI 触发沿 /
+<code>0x42</code> 有没有被读。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>下标</th>
+<th>内容</th>
+<th>下标</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>tried</code></td>
+<td>15</td>
+<td><code>havePdo</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>ready</code></td>
+<td>16-19</td>
+<td>当前 tick（32 位）</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>idValid</code></td>
+<td><strong>20</strong></td>
+<td><strong><code>g_rdoAck</code>（申请成功？）</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>devId</code></td>
+<td>21</td>
+<td><code>specRev</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>toggleOn</code></td>
+<td>22</td>
+<td>已发 Soft Reset 次数</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>busOk</code></td>
+<td>23</td>
+<td>TX 计数</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>vbusOk</code></td>
+<td><strong>24</strong></td>
+<td><strong><code>intaAcc</code></strong>（bit2=TXSENT bit4=RETRYFAIL bit3=HARDSENT）</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>vbusRaw</code>（STATUS0 原值）</td>
+<td>25</td>
+<td><code>intbAcc</code>（bit0=GCRCSENT）</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>cc</code></td>
+<td><strong>26</strong></td>
+<td><strong><code>status1</code></strong>（bit5=RX 空 bit3=TX 空）</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>ccSelected</code></td>
+<td><strong>27</strong></td>
+<td><strong><code>status0a</code></strong>（bit0=HARDRST）</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>rxMsgCount</code></td>
+<td>28</td>
+<td><code>uiPhase</code></td>
+</tr>
+<tr>
+<td>11-12</td>
+<td><code>lastHeader</code></td>
+<td>29</td>
+<td><code>status0a &amp; 0x01</code></td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>i2cErr</code> 低字节</td>
+<td><strong>30</strong></td>
+<td><strong>中断进入次数低字节</strong>（滚动）</td>
+</tr>
+<tr>
+<td>14</td>
+<td><code>attached</code></td>
+<td><strong>31</strong></td>
+<td><strong>心跳顶事次数低字节</strong>（正常应恒为 0）</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>第 11 章　故障排查对照表</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>可能原因</th>
+<th>怎么查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>屏只有背光、没有画面</td>
+<td>编译选项不对（曾用 <code>Optim 4</code> 编译出问题版本）</td>
+<td>必须 <code>Optim 2</code> + LTO 开；看开机三色自检</td>
+</tr>
+<tr>
+<td>三色闪烁出现，但文字是垃圾</td>
+<td>字库指针问题（LTO 把字模表删了）</td>
+<td>检查是否误用 <code>Font_7x10.data</code>，必须走 <code>font_get_font_glyph()</code></td>
+</tr>
+<tr>
+<td>屏正常但按键无反应</td>
+<td><code>RowRender()</code> 里 <code>ci</code> 越界（<code>g_rowGlyph[22]</code> 被读到 <code>g_diag</code>）</td>
+<td>确认 <code>if (ci &lt; COLS)</code> 这层夹子还在</td>
+</tr>
+<tr>
+<td>按键后一直 <code>LISTENING...</code></td>
+<td>没收到 caps</td>
+<td>看 <code>g_snap[7]</code>（STATUS0）确认 VBUS 在不在；看 <code>g_snap[26]</code> 的 RX_EMPTY</td>
+</tr>
+<tr>
+<td>发完 Soft Reset 仍读不到 PDO</td>
+<td>FUSB302 PD 逻辑锁死，没做 <code>PD_RESET</code></td>
+<td>看日志里有没有 <code>L_RECOVER(24)</code></td>
+</tr>
+<tr>
+<td>VBUS 在 5V/0V 之间反复跳</td>
+<td>收到 caps 后没在 28ms 内回 Request</td>
+<td>抓包看有没有 <code>SNK Request</code>；查 <code>L_RDO(25)</code></td>
+</tr>
+<tr>
+<td><strong>广播停之后</strong>按按键，发了 Soft Reset 却拿不到 PDO</td>
+<td><strong>一次 35ms 的整屏重画把 Request 顶迟了</strong>（I²C 上能看到发完 Soft Reset 后 36ms 全静默）</td>
+<td>抓 I²C：Soft Reset 那笔之后到第一次读 <code>0x43</code> 之间隔多久？<strong>&gt;10ms 就有问题</strong>。查 <code>Row()</code> 的行缓存是否生效（§4 工位 5）</td>
+</tr>
+<tr>
+<td>空闲期 SPI 还在每 2s 长脉冲一次</td>
+<td>看门狗还是"整屏重画"的老语义</td>
+<td><code>PD_UI_WATCHDOG_MS</code> 必须是 <strong>500</strong>，且看门狗分支只调 <code>InvalidateRow(一行)</code></td>
+</tr>
+<tr>
+<td>收到一包就闪一下屏（老版本）</td>
+<td>中断块里有 <code>dirty = true</code>（<code>I_GCRCSENT</code> 每包都置）</td>
+<td>中断服务分支里<strong>不能</strong>置 <code>dirty</code>；上屏的量全靠 <code>UiFp</code> 指纹覆盖</td>
+</tr>
+<tr>
+<td><strong>广播期内</strong>按按键，偶尔一次失败（发 HRST）</td>
+<td>开机没预铺整帧 → 按键后第一帧一次画 9 个矩形 35ms，把"先听"窗口开头的 caps 挡住</td>
+<td>抓 I²C：按键那笔 <code>W44:0C 02</code> 之后到下一次事务之间应 <strong>≤10ms</strong>；确认开机段有"预铺整帧"那 9 个矩形（§4 工位 5）</td>
+</tr>
+<tr>
+<td>开机画面比原来多一次连续刷屏</td>
+<td>这是<strong>故意的</strong>（预铺整帧），不是 bug</td>
+<td>应在上电三色自检之后、<code>PRESS KEY</code> 之前</td>
+</tr>
+<tr>
+<td>开机抓包看不到 Hard Reset</td>
+<td><code>pollAttach()</code> 800ms 内没探到 attach</td>
+<td>看 <code>L_ATTACH(5)</code> 的 arg0 是不是 0</td>
+</tr>
+<tr>
+<td>屏幕第一行有 6 个像素的垃圾色</td>
+<td><code>RowRender()</code> 越界（历史 bug）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><code>g_diag.vbusOk</code> 一直是 0</td>
+<td>VBUS 真没来 / 源端被 Hard Reset 打断</td>
+<td>先确认源端是否在 VBUS 恢复窗口内</td>
+</tr>
+<tr>
+<td><strong>PDO 电压/电流明显不对</strong>（例：屏上 25.6V/4.00A，源端其实报 5V/2A）</td>
+<td><strong>I²C burst 读每次多读了 1 个字节</strong>，整段错位</td>
+<td>抓 I²C 波形<strong>数字节数</strong>：<code>W44:3C | R45-&gt;[…]</code> 必须<strong>恰好 7</strong> 个、<code>W44:43 | R45-&gt;[…]</code> 的 head 读必须<strong>恰好 3</strong> 个。只数事务条数是发现不了的</td>
+</tr>
+<tr>
+<td>状态读会把 PD 报文字节吃掉</td>
+<td>同上：从 <code>0x3C</code> 连读 7 个时多读的第 8 个正好是 <code>0x43 = FIFOS</code></td>
+<td>同上</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>附录 A　文件与函数索引</h2>
+<h3>应用层</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>关键内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Core/SRC/main.cpp</code></td>
+<td><code>App_Run()</code> 主循环、<code>DrawStatus()</code>、<code>DrawPdoList()</code>、<code>Row()</code>、<code>Log()</code>、<code>WaitForButton()</code></td>
+</tr>
+<tr>
+<td><code>Core/SRC/gpio.cpp</code></td>
+<td>GPIO / EXTI 初始化</td>
+</tr>
+<tr>
+<td><code>Core/SRC/py32f003_it.cpp</code></td>
+<td>中断服务程序（只清标志）</td>
+</tr>
+</tbody>
+</table>
+<h3>库层</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>关键函数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LoveFinderLib/FUSB302/FUSB302.cpp</code></td>
+<td><code>init()</code> <code>startSinkToggle()</code> <code>pollAttach()</code> <code>selectCC()</code> <code>pdReset()</code> <code>recover()</code> <code>sendHardReset()</code> <code>sendControl()</code> <code>sendData()</code> <code>sendRequest()</code> <code>fetchMessage()</code> <code>pollSourceCapabilities()</code> <code>decodePdo()</code></td>
+</tr>
+<tr>
+<td><code>LoveFinderLib/FUSB302/FUSB302.hpp</code></td>
+<td>寄存器地址、位定义、<code>e_FUSB302_CC</code>、<code>e_FUSB302_PDOType</code></td>
+</tr>
+</tbody>
+</table>
+<h3>关键调用链</h3>
+<pre><code>App_Run()
+ ├─ pd.init(I2C1)                      ← 配寄存器
+ ├─ pd.startSinkToggle()               ← 开 toggle 探测 CC
+ ├─ pd.pollAttach()                    ← 读 Status1a.TOGSS
+ ├─ pd.selectCC(cc)                    ← 钉死 CC 路由
+ ├─ pd.sendHardReset()                 ← 开机第一枪
+ ├─ WaitForButton()                    ← 等按键
+ └─ for(;;)
+     ├─ pd.recover(cc)                 ← 按需复活
+     ├─ pd.readReg8(STATUS0)           ← 查 VBUS
+     ├─ pd.rxEmpty() / pollSourceCapabilities()
+     │   └─ pd.sendRequest(rdo)        ← 28ms 红线
+     ├─ pd.readReg8(INTERRUPTA/B)      ← 中断闩锁
+     └─ DrawPdoList() / DrawStatus()   ← 刷屏
+</code></pre>
+<hr>
+<h2>附录 B　术语中英对照</h2>
+<table>
+<thead>
+<tr>
+<th>中文</th>
+<th>英文 / 缩写</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>供电方</td>
+<td>Source</td>
+<td>外置 SW3526S</td>
+</tr>
+<tr>
+<td>用电方</td>
+<td>Sink</td>
+<td>本开发板</td>
+</tr>
+<tr>
+<td>电源数据对象</td>
+<td>PDO</td>
+<td>Power Data Object</td>
+</tr>
+<tr>
+<td>请求数据对象</td>
+<td>RDO</td>
+<td>Request Data Object</td>
+</tr>
+<tr>
+<td>源能力</td>
+<td>Source_Capabilities</td>
+<td>msgType = 1</td>
+</tr>
+<tr>
+<td>物理层芯片</td>
+<td>PHY</td>
+<td>这里是 FUSB302B</td>
+</tr>
+<tr>
+<td>双向标记编码</td>
+<td>BMC</td>
+<td>PD 在 CC 线上用的调制方式</td>
+</tr>
+<tr>
+<td>可调压电源</td>
+<td>PPS</td>
+<td>Programmable Power Supply（PD3.0）</td>
+</tr>
+<tr>
+<td>硬复位</td>
+<td>Hard Reset</td>
+<td>撤 VBUS 到 0V 再重建</td>
+</tr>
+<tr>
+<td>软复位</td>
+<td>Soft Reset</td>
+<td>只重播能力表，不断电</td>
+</tr>
+<tr>
+<td>合约</td>
+<td>Contract</td>
+<td>双方就某一档达成一致</td>
+</tr>
+<tr>
+<td>读即清零</td>
+<td>R/C</td>
+<td>Read-to-Clear</td>
+</tr>
+<tr>
+<td>类型 C 配置通道</td>
+<td>CC</td>
+<td>Configuration Channel</td>
+</tr>
+<tr>
+<td>目标位置</td>
+<td>Object Position</td>
+<td>RDO 里"我要第几档"</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p><em>文档结束。有看不明白的地方直接问，我可以再往下拆到寄存器级。</em></p>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'neutral',
+    securityLevel: 'loose',
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    sequence: { useMaxWidth: true, wrap: true },
+    themeVariables: {
+      fontFamily: 'Microsoft YaHei, Segoe UI, sans-serif',
+      fontSize: '14px'
+    }
+  });
+</script>
+</body>
+</html>
