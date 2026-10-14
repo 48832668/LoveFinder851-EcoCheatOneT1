@@ -341,7 +341,7 @@
               <MiscControls>-Wno-register</MiscControls>
               <Define>PY32F003x8,USE_FULL_LL_DRIVER,ST7735_USE_DMA=1,FORBID_VECT_TAB_MIGRATION</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/INC;../LoveFinderLib/FontLib;../../../../LoveFinderLibForPY32_LL/FontLib;../../../../LoveFinderLibForPY32_LL/ST7735;../../../../LoveFinderLibForPY32_LL/FUSB302;../Drivers/CMSIS/Include;../Drivers/PY32F003_HAL_Driver/Inc;../Drivers/CMSIS/Device/PY32F003/Include</IncludePath>
+              <IncludePath>../Core/INC;../LoveFinderLib/FontLib;../../../../LoveFinderLibForPY32_LL/FontLib;../../../../LoveFinderLibForPY32_LL/ST7735;../../../../LoveFinderLibForPY32_LL/SPI;../../../../LoveFinderLibForPY32_LL/FUSB302;../Drivers/CMSIS/Include;../Drivers/PY32F003_HAL_Driver/Inc;../Drivers/CMSIS/Device/PY32F003/Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>

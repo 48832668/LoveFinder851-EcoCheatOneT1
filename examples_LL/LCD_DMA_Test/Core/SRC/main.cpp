@@ -69,6 +69,10 @@
 /* 1 ms tick counter, incremented from SysTick_Handler() */
 volatile uint32_t uwTick = 0;
 /* USER CODE BEGIN PV */
+/* 全局 LCD 实例 —— 统一版库是"一个对象 = 一块屏"的类 API。
+ * 引脚 / SPI / DMA / 面板批次全部取自工程 Core/INC/lf_config.h。 */
+static LoveFinderLib::ST7735 g_lcd;
+
 /* 全局帧计数：驱动动画的时间轴 */
 static uint32_t s_frame = 0;
 
@@ -140,7 +144,7 @@ int main(void)
   Studio_CRC_Init();
   /* USER CODE BEGIN 2 */
   /* ST7735 初始化（库内会做一次 DMA 启动自检，失败则永久退化为阻塞 SPI） */
-  ST7735_Init();
+  g_lcd.init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -214,7 +218,7 @@ constexpr uint16_t C_BARBG = 0x10A2;   /* 状态栏底色：深灰蓝 */
 /* 统一文字输出：字体用字符级子集 Font_7x10 */
 static void Text(uint16_t x, uint16_t y, const char* s, uint16_t fg, uint16_t bg)
 {
-  ST7735_WriteString(x, y, s, Font_7x10, fg, bg);
+  g_lcd.writeString(x, y, s, Font_7x10, fg, bg);
 }
 
 /*--- 状态栏 ---------------------------------------------------------------
@@ -226,8 +230,8 @@ static void StatusBegin(uint8_t stage, const char* name, bool dmaOn)
 {
   char buf[24];
 
-  ST7735_FillScreen(ST7735::BLACK);
-  ST7735_FillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
+  g_lcd.fillScreen(ST7735::BLACK);
+  g_lcd.fillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
 
   (void)snprintf(buf, sizeof(buf), "[%u/%u] %s",
                  static_cast<unsigned>(stage), static_cast<unsigned>(STAGE_TOTAL), name);
@@ -264,14 +268,14 @@ static void StageSummary(uint8_t stage, const char* name,
     s_dmaMs[i]  = dmaMs;
   }
 
-  ST7735_FillScreen(ST7735::BLACK);
-  ST7735_FillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
+  g_lcd.fillScreen(ST7735::BLACK);
+  g_lcd.fillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
   (void)snprintf(buf, sizeof(buf), "[%u] %s  RESULT",
                  static_cast<unsigned>(stage), name);
   Text(2, 1, buf, ST7735::WHITE, C_BARBG);
 
-  Text(2, 11, ST7735_IsDmaActive() ? "SPI 12MHz  DMA:ON" : "SPI 12MHz  DMA:OFF",
-       ST7735_IsDmaActive() ? ST7735::GREEN : ST7735::RED, C_BARBG);
+  Text(2, 11, g_lcd.isDmaActive() ? "SPI 12MHz  DMA:ON" : "SPI 12MHz  DMA:OFF",
+       g_lcd.isDmaActive() ? ST7735::GREEN : ST7735::RED, C_BARBG);
 
   Text(4, 28, "noDMA", ST7735::CYAN, ST7735::BLACK);
   (void)snprintf(buf, sizeof(buf), "%lu FPS   %lu ms",
@@ -289,9 +293,9 @@ static void StageSummary(uint8_t stage, const char* name,
   Text(4, 58, buf, ST7735::WHITE, ST7735::BLACK);
 
   (void)snprintf(buf, sizeof(buf), "tx:%lu f:%lu rm:%lu",
-                 static_cast<unsigned long>(ST7735_GetDmaTxOk()),
-                 static_cast<unsigned long>(ST7735_GetDmaTxFail()),
-                 static_cast<unsigned long>(ST7735_GetDmaRemapReg() & 0x1FU));
+                 static_cast<unsigned long>(g_lcd.getDmaTxOk()),
+                 static_cast<unsigned long>(g_lcd.getDmaTxFail()),
+                 static_cast<unsigned long>(LoveFinderLib::ST7735::getDmaRemapReg() & 0x1FU));
   Text(4, 70, buf, C_GRAY, ST7735::BLACK);
 
   LL_mDelay(2500);
@@ -500,7 +504,7 @@ static void Stage1_Fill(void)
   uint32_t t0 = BSP_GetTick();
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
-    ST7735_FillRectangle(0, BODY_Y, BODY_W, BODY_H, kFillPalette[ci]);
+    g_lcd.fillRectangle(0, BODY_Y, BODY_W, BODY_H, kFillPalette[ci]);
     ci = static_cast<uint8_t>((ci + 1U) % kFillPaletteLen);
     frames++;
   }
@@ -513,7 +517,7 @@ static void Stage1_Fill(void)
   t0 = BSP_GetTick();
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
-    ST7735_FillRectangle_DMA(0, BODY_Y, BODY_W, BODY_H, kFillPalette[ci]);
+    g_lcd.fillRectangleDma(0, BODY_Y, BODY_W, BODY_H, kFillPalette[ci]);
     ci = static_cast<uint8_t>((ci + 1U) % kFillPaletteLen);
     frames++;
   }
@@ -539,7 +543,7 @@ static void Stage2_Shape(void)
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
     ShapeGen();
-    ST7735_DrawFrameRectBlocking(0, BODY_Y, BODY_W, BODY_H, ShapeRowRender);
+    g_lcd.drawFrameRectBlocking(0, BODY_Y, BODY_W, BODY_H, ShapeRowRender);
     frames++;
   }
   const uint32_t cpuFps = frames;
@@ -551,7 +555,7 @@ static void Stage2_Shape(void)
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
     ShapeGen();
-    ST7735_DrawFrameRectEx(0, BODY_Y, BODY_W, BODY_H, ShapeRowRender, true);
+    g_lcd.drawFrameRectEx(0, BODY_Y, BODY_W, BODY_H, ShapeRowRender, true);
     frames++;
   }
   const uint32_t dmaFps = frames;
@@ -574,7 +578,7 @@ static void Stage3_Flag(void)
   uint32_t t0 = BSP_GetTick();
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
-    ST7735_DrawFrameRectBlocking(0, BODY_Y, BODY_W, BODY_H, FlagRowRender);
+    g_lcd.drawFrameRectBlocking(0, BODY_Y, BODY_W, BODY_H, FlagRowRender);
     s_frame += 2U;
     frames++;
   }
@@ -586,7 +590,7 @@ static void Stage3_Flag(void)
   t0 = BSP_GetTick();
   while ((BSP_GetTick() - t0) < PERF_WINDOW_MS)
   {
-    ST7735_DrawFrameRectEx(0, BODY_Y, BODY_W, BODY_H, FlagRowRender, true);
+    g_lcd.drawFrameRectEx(0, BODY_Y, BODY_W, BODY_H, FlagRowRender, true);
     s_frame += 2U;
     frames++;
   }
@@ -603,8 +607,8 @@ static void Stage4_Summary(void)
 {
   char buf[40];
 
-  ST7735_FillScreen(ST7735::BLACK);
-  ST7735_FillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
+  g_lcd.fillScreen(ST7735::BLACK);
+  g_lcd.fillRectangle(0, 0, ST7735_WIDTH, BAR_H, C_BARBG);
   Text(2, 1, "[4/4] SUMMARY", ST7735::WHITE, C_BARBG);
   Text(2, 11, "FPS: CPU vs DMA", C_GRAY, C_BARBG);
 

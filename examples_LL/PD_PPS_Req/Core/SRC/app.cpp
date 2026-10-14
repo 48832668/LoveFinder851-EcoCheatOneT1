@@ -244,6 +244,9 @@ using LoveFinderLib::e_FUSB302_PDOType;
 namespace Reg = LoveFinderLib::FUSB302_Reg;
 namespace Bit = LoveFinderLib::FUSB302_Bit;
 
+/* ---- LCD 对象（统一版库：一个对象 = 一块屏；硬件配置见 Core/INC/lf_config.h） ---- */
+LoveFinderLib::ST7735 g_lcd;
+
 /* ---- 屏幕几何（对齐参考工程 PPS_Req 的两行版式；本板不画横幅，两行铺满 160×80） ---- */
 constexpr uint16_t SCR_W  = 160;
 constexpr uint16_t SCR_H  = 80;
@@ -596,8 +599,8 @@ void DrawRow(uint8_t row, uint16_t req, uint16_t mn, uint16_t mx,
       (strcmp(c.realS, g_row.realS) != 0);
 
   const uint32_t t0 = BSP_GetTick();
-  if (barChg) { ST7735_DrawFrameRect(REG_LX0, g_row.ry, REG_LW, ROW_H, RowRenderL); }
-  if (numChg) { ST7735_DrawFrameRect(REG_RX0, g_row.ry, REG_RW, ROW_H, RowRenderR); }
+  if (barChg) { g_lcd.drawFrameRect(REG_LX0, g_row.ry, REG_LW, ROW_H, RowRenderL); }
+  if (numChg) { g_lcd.drawFrameRect(REG_RX0, g_row.ry, REG_RW, ROW_H, RowRenderR); }
   if (full) {   /* 只在整行重画时打点，避免实时数值把日志环刷爆 */
     const uint32_t d = BSP_GetTick() - t0;
     Log(L_DRAW, static_cast<uint8_t>(d & 0xFFu), static_cast<uint8_t>((d >> 8) & 0xFFu));
@@ -616,7 +619,7 @@ void DrawRow(uint8_t row, uint16_t req, uint16_t mn, uint16_t mx,
 /* 首屏：铺底 + 失效两行缓存，随后由 DrawRow 全画一遍。 */
 void UiInitScreen()
 {
-  ST7735_FillScreen(C_BG);
+  g_lcd.fillScreen(C_BG);
   UiReset();
 }
 
@@ -1182,7 +1185,7 @@ extern "C" void App_Run(void)
   Log(L_BOOT, 0, 0);
 
   /* 先把屏点亮：整板由 DAPLink 3V3 供（不受 PD VBUS 影响），屏驱可放在 PD 之前。 */
-  ST7735_Init();
+  g_lcd.init();
   /* 首屏：无横幅，两行铺满 160×80（与参考工程 PPS_Req 的两行版式一致）。
    * 此时还没 caps，先按默认量程画一帧；收到 caps 后差分刷新自动更新。 */
   UiInitScreen();

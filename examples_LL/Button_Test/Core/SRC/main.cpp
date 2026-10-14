@@ -83,6 +83,12 @@ namespace {
 LoveFinderLib::Button g_button;
 
 /*============================================================================
+ * LCD 对象 —— 统一版库: 一个对象 = 一块屏
+ * 引脚 / SPI / DMA / 面板批次取自工程 Core/INC/lf_config.h。
+ *============================================================================*/
+LoveFinderLib::ST7735 g_lcd;
+
+/*============================================================================
  * 长按阈值档位 —— 双击切换一档，演示「长按阈值运行期可调」
  *
  * 除了这里的运行期切换，阈值还有另外两个可调入口：
@@ -182,7 +188,7 @@ void ui_write_field(uint16_t x, uint16_t y, const char* label,
     n = static_cast<uint8_t>(n + width);
     line[n] = '\0';
 
-    ST7735_WriteString(x, y, line, Font_7x10, color, ST7735::BLACK);
+    g_lcd.writeString(x, y, line, Font_7x10, color, ST7735::BLACK);
 }
 
 /*--------------------------------------------------------------------------
@@ -205,7 +211,7 @@ void ui_write_thresholds(uint16_t lp, uint16_t dc)
     line[n++] = 's';
     line[n] = '\0';
 
-    ST7735_WriteString(0, ROW_THRESH, line, Font_7x10, ST7735::GREEN, ST7735::BLACK);
+    g_lcd.writeString(0, ROW_THRESH, line, Font_7x10, ST7735::GREEN, ST7735::BLACK);
 }
 
 /*--------------------------------------------------------------------------
@@ -222,7 +228,7 @@ void ui_write_charge(uint8_t pct)
     line[n++] = '%';
     line[n] = '\0';
 
-    ST7735_WriteString(0, ROW_CHG, line, Font_7x10, ST7735::WHITE, ST7735::BLACK);
+    g_lcd.writeString(0, ROW_CHG, line, Font_7x10, ST7735::WHITE, ST7735::BLACK);
 }
 
 /*--------------------------------------------------------------------------
@@ -230,13 +236,13 @@ void ui_write_charge(uint8_t pct)
  *------------------------------------------------------------------------*/
 void ui_draw_static()
 {
-    ST7735_WriteString(0, ROW_TITLE, "Button_Test", Font_7x10, ST7735::WHITE, ST7735::BLACK);
+    g_lcd.writeString(0, ROW_TITLE, "Button_Test", Font_7x10, ST7735::WHITE, ST7735::BLACK);
 
     /* 双击手势提示 */
-    ST7735_WriteString(HINT_X, ROW_CHG, "2x:LP+", Font_7x10, ST7735::ORANGE, ST7735::BLACK);
+    g_lcd.writeString(HINT_X, ROW_CHG, "2x:LP+", Font_7x10, ST7735::ORANGE, ST7735::BLACK);
 
     /* 充能进度条外框 */
-    ST7735_DrawRect(BAR_X, BAR_Y, BAR_W, BAR_H, ST7735::WHITE);
+    g_lcd.drawRect(BAR_X, BAR_Y, BAR_W, BAR_H, ST7735::WHITE);
 }
 
 /*--------------------------------------------------------------------------
@@ -246,8 +252,8 @@ void ui_update_bar(uint8_t pct, bool pressed)
 {
     if (pressed != g_ui.pressed)
     {
-        ST7735_DrawRect(BAR_X, BAR_Y, BAR_W, BAR_H,
-                        pressed ? ST7735::RED : ST7735::WHITE);
+        g_lcd.drawRect(BAR_X, BAR_Y, BAR_W, BAR_H,
+                       pressed ? ST7735::RED : ST7735::WHITE);
         g_ui.pressed = pressed;
     }
 
@@ -262,14 +268,14 @@ void ui_update_bar(uint8_t pct, bool pressed)
 
     if (fillW > 0u)
     {
-        ST7735_FillRectangle(static_cast<uint16_t>(BAR_X + 1u), static_cast<uint16_t>(BAR_Y + 1u),
-                             fillW, BAR_INNER_H, ST7735::ORANGE);
+        g_lcd.fillRectangle(static_cast<uint16_t>(BAR_X + 1u), static_cast<uint16_t>(BAR_Y + 1u),
+                            fillW, BAR_INNER_H, ST7735::ORANGE);
     }
     if (fillW < BAR_INNER_W)
     {
-        ST7735_FillRectangle(static_cast<uint16_t>(BAR_X + 1u + fillW), static_cast<uint16_t>(BAR_Y + 1u),
-                             static_cast<uint16_t>(BAR_INNER_W - fillW), BAR_INNER_H,
-                             ST7735::BLACK);
+        g_lcd.fillRectangle(static_cast<uint16_t>(BAR_X + 1u + fillW), static_cast<uint16_t>(BAR_Y + 1u),
+                            static_cast<uint16_t>(BAR_INNER_W - fillW), BAR_INNER_H,
+                            ST7735::BLACK);
     }
 }
 
@@ -370,8 +376,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* ---- 屏幕 ---- */
-  ST7735_Init();                       /* 含背光使能 + 面板反色 */
-  ST7735_FillScreen(ST7735::BLACK);
+  g_lcd.init();                        /* 含背光使能 + 面板反色 */
+  g_lcd.fillScreen(ST7735::BLACK);
   ui_draw_static();
 
   /* ---- 按键 ----

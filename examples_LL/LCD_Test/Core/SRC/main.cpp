@@ -63,6 +63,8 @@
 /* 1 ms tick counter, incremented from SysTick_Handler() */
 volatile uint32_t uwTick = 0;
 /* USER CODE BEGIN PV */
+/* 全局 LCD 实例 (统一版库 = 一个对象一块屏); 硬件配置见 Core/INC/lf_config.h */
+static LoveFinderLib::ST7735 g_lcd;
 
 /* USER CODE END PV */
 
@@ -118,11 +120,11 @@ int main(void)
      字体 Font_7x10 —— 像素数据在共享库里, 本工程只声明编译哪些字
      (见 LoveFinderLib/FontLib/font_config.hpp 的 FONT_7X10_CHARS, 共 25 个字符)，
      未声明的字符渲染时自动跳过。 */
-  ST7735_Init();
-  ST7735_FillScreen(ST7735::BLACK);
-  ST7735_WriteString(40, 12, "exp1_LCD_Test", Font_7x10, ST7735::WHITE, ST7735::BLACK);
-  ST7735_WriteString(40, 32, "EcoCheatOneT1", Font_7x10, ST7735::CYAN,  ST7735::BLACK);
-  ST7735_WriteString(40, 52, "HelloWorld!",   Font_7x10, ST7735::RED,   ST7735::BLACK);
+  g_lcd.init();
+  g_lcd.fillScreen(ST7735::BLACK);
+  g_lcd.writeString(40, 12, "exp1_LCD_Test", Font_7x10, ST7735::WHITE, ST7735::BLACK);
+  g_lcd.writeString(40, 32, "EcoCheatOneT1", Font_7x10, ST7735::CYAN,  ST7735::BLACK);
+  g_lcd.writeString(40, 52, "HelloWorld!",   Font_7x10, ST7735::RED,   ST7735::BLACK);
   /* USER CODE END 2 */
 
   /* Infinite loop */

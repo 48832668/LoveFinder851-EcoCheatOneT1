@@ -266,7 +266,7 @@ volatile uint32_t g_log_t0   = 0;
  *   [19] (双击次数&0xF)<<4 | (长按次数&0xF)
  *   [20..23] 主循环轮次(小端)
  *   [24] g_pdIrqCnt 低字节      [25] g_keyIrqCnt 低字节
- *   [26] g_clkIrqCnt 低字节     [27] 最近 STATUS1
+ *   [26] (保留)                 [27] 最近 STATUS1
  *   [28] 最近 STATUS0A          [29] 最近 Interrupt(0x42)
  *   [30] hbHits 低字节（心跳顶事次数 → 正常应恒为 0）
  *   [31] intaAcc | int0Acc（已置位过的中断源集合） */
@@ -302,6 +302,9 @@ using LoveFinderLib::e_FUSB302_CC;
 using LoveFinderLib::e_FUSB302_PDOType;
 namespace Reg = LoveFinderLib::FUSB302_Reg;
 namespace Bit = LoveFinderLib::FUSB302_Bit;
+
+/* LCD 对象（统一版库：一个对象 = 一块屏；硬件配置见 Core/INC/lf_config.h） */
+LoveFinderLib::ST7735 g_lcd;
 
 constexpr uint16_t FONT_W = 7;      /* Font_7x10 字宽 */
 constexpr uint16_t ROW_H  = 10;     /* Font_7x10 行高 */
@@ -380,7 +383,7 @@ void InvalidateRow(uint8_t idx)
 
 /* 行回调：调用频率是**每个像素行一次**（一行文字 10px 高 → 回调 10 次）。
  * 每次把整条 160px 像素行铺进 dst（大端 RGB565）；传输由
- * ST7735_DrawFrameRect() 内部的 DMA 乒乓负责 —— CPU 只管算。
+ * g_lcd.drawFrameRect() 内部的 DMA 乒乓负责 —— CPU 只管算。
  *
  * ⚠️ 字模**必须**用 font_get_glyph() 查，不能写 `Font_7x10.data[...]`：
  *    本字库是"字符级编译"（font_data.cpp 里 Font_7x10 = {7,10,nullptr}），
@@ -454,7 +457,7 @@ void Row(uint8_t r, const char* s, uint16_t fg, uint16_t bg = ST7735::BLACK)
   g_rowFg  = fg;
   g_rowBg  = bg;
   g_rowTop = static_cast<uint16_t>(r * ROW_H);
-  ST7735_DrawFrameRect(0, g_rowTop, ST7735_WIDTH, ROW_H, RowRender);
+  g_lcd.drawFrameRect(0, g_rowTop, ST7735_WIDTH, ROW_H, RowRender);
 }
 
 /* 标题栏底色：整条实心填充。即使字库一路出问题，这条蓝灰条也一定会出现 ——
@@ -484,7 +487,7 @@ void HeaderBar()
   g_rcBg[ROWS] = C_BAR;
   g_rcFg[ROWS] = C_BAR;
   g_rcOk[ROWS] = true;
-  ST7735_FillRectangle_DMA(0, 0, ST7735_WIDTH, ROW_H, C_BAR);
+  g_lcd.fillRectangleDma(0, 0, ST7735_WIDTH, ROW_H, C_BAR);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -983,13 +986,13 @@ extern "C" void App_Run(void)
   /* ① 先把屏点亮。
    * 整板与 DAPLink 取自电脑 3V3（不受 PD VBUS 影响），所以屏驱可以放在
    * PD 之前 —— 屏全黑时根本分不清"固件没跑"还是"在等源端"。 */
-  ST7735_Init();
-  ST7735_FillScreen(ST7735::BLACK);
+  g_lcd.init();
+  g_lcd.fillScreen(ST7735::BLACK);
 
   /* ★ 开机就把整帧铺一遍，把行缓存填满。
    *
    * 【为什么必须在这里补】
-   *   ST7735_FillScreen() 是直接整屏灌像素，**不经过 Row()**，
+   *   g_lcd.fillScreen() 是直接整屏灌像素，**不经过 Row()**，
    *   所以它一个缓存槽都不会填。不预铺的话，第一次 DrawXxx() 会一次画
    *   9 个矩形 ≈ 35ms —— 而这一帧正好可能压在"收到 caps → 24ms 内回
    *   Request"的窗口上（实测差 0.74ms 就失败）。
@@ -1914,7 +1917,7 @@ extern "C" void App_Run(void)
     g_snap[23] = static_cast<uint8_t>((loops >> 24) & 0xFFu);
     g_snap[24] = static_cast<uint8_t>(g_pdIrqCnt & 0xFFu);
     g_snap[25] = static_cast<uint8_t>(g_keyIrqCnt & 0xFFu);
-    g_snap[26] = static_cast<uint8_t>(g_clkIrqCnt & 0xFFu);
+    g_snap[26] = 0u;  /* (原 g_clkIrqCnt，已移除) */
     g_snap[27] = lastS1;
     g_snap[28] = lastS0a;
     g_snap[29] = lastI0;

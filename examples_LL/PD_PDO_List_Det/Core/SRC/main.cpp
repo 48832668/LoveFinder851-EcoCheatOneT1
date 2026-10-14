@@ -272,6 +272,9 @@ using LoveFinderLib::FUSB302_PDO;
 using LoveFinderLib::e_FUSB302_CC;
 using LoveFinderLib::e_FUSB302_PDOType;
 
+/* LCD 对象（统一版库：一个对象 = 一块屏；硬件配置见 Core/INC/lf_config.h） */
+LoveFinderLib::ST7735 g_lcd;
+
 constexpr uint16_t FONT_W = 7;      /* Font_7x10 字宽 */
 constexpr uint16_t ROW_H  = 10;     /* Font_7x10 行高 */
 constexpr uint8_t  COLS   = 22;     /* 160 / 7 */
@@ -353,7 +356,7 @@ void InvalidateRow(uint8_t idx)
 
 /* 行回调：调用频率是**每个像素行一次**（一行文字 10px 高 → 回调 10 次）。
  * 每次把整条 160px 像素行铺进 dst（大端 RGB565）；传输由
- * ST7735_DrawFrameRect() 内部的 DMA 乒乓负责 —— CPU 只管算。
+ * g_lcd.drawFrameRect() 内部的 DMA 乒乓负责 —— CPU 只管算。
  *
  * ⚠️ 字模**必须**用 font_get_glyph() 查，不能写 `Font_7x10.data[...]`：
  *    本字库是"字符级编译"（font_data.cpp 里 `Font_7x10 = {7,10,nullptr}`），
@@ -433,7 +436,7 @@ void Row(uint8_t r, const char* s, uint16_t fg, uint16_t bg = ST7735::BLACK)
    * （每字符 7×10=70 次，外加每字符一次 SetAddressWindow），整屏 ~14256 次，
    * 实测刷一屏 ≈80ms —— 主循环 ~90ms 的周期几乎全是它，I²C 轮询只是搭车。
    *
-   * 现在把这一行 160×10 交给 ST7735_DrawFrameRect 的 DMA 乒乓
+   * 现在把这一行 160×10 交给 g_lcd.drawFrameRect 的 DMA 乒乓
    * （DMA 发第 N 行时 CPU 算第 N+1 行，计算与传输重叠）。
    * 整屏 = 160×80×2B = 25600B，12MHz SPI 下 ≈17ms，已经贴着 SPI 带宽上限。
    * DMA 自检失败时驱动自动退化回阻塞发送，功能不受影响。 */
@@ -449,7 +452,7 @@ void Row(uint8_t r, const char* s, uint16_t fg, uint16_t bg = ST7735::BLACK)
   g_rowFg  = fg;
   g_rowBg  = bg;
   g_rowTop = static_cast<uint16_t>(r * ROW_H);
-  ST7735_DrawFrameRect(0, g_rowTop, ST7735_WIDTH, ROW_H, RowRender);
+  g_lcd.drawFrameRect(0, g_rowTop, ST7735_WIDTH, ROW_H, RowRender);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -472,7 +475,7 @@ void HeaderBar()
   g_rcBg[ROWS] = C_BAR;
   g_rcFg[ROWS] = C_BAR;
   g_rcOk[ROWS] = true;
-  ST7735_FillRectangle_DMA(0, 0, ST7735_WIDTH, ROW_H, C_BAR);
+  g_lcd.fillRectangleDma(0, 0, ST7735_WIDTH, ROW_H, C_BAR);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -918,13 +921,13 @@ void App_Run()
    * 影响，所以可以把屏驱初始化提到等按键【之前】——
    * 之前屏全黑时根本分不清是"固件没跑"还是"在等按键"，调试非常痛苦。
    * 点亮屏之后，一眼就能看出固件状态。 */
-  ST7735_Init();
-  ST7735_FillScreen(ST7735::BLACK);
+  g_lcd.init();
+  g_lcd.fillScreen(ST7735::BLACK);
 
   /* ★ 2026-10-09 第八轮补：**开机就把整帧铺一遍**，把行缓存填满。
    *
    * 【为什么必须在这里补】
-   *   `ST7735_FillScreen()` 是直接整屏灌像素，**不经过 `Row()`**，
+   *   `g_lcd.fillScreen()` 是直接整屏灌像素，**不经过 `Row()`**，
    *   所以它一个缓存槽都不会填。开机只画了第 3/4/6 行，于是第
    *   0/1/2/5/7 行 + 标题条的 `g_rcOk` 全是 0。
    *
