@@ -36,8 +36,4 @@ volatile uint8_t  g_keyIrq    = 0;
 volatile uint8_t  g_keyLevel  = 1;   /* 上电默认"松开"（高） */
 volatile uint32_t g_keyIrqCnt = 0;
 
-/*============================================================================
- * ③ 时钟芯片 INT (PB5 / EXTI5)
- *============================================================================*/
-volatile uint8_t  g_clkIrq    = 0;
-volatile uint32_t g_clkIrqCnt = 0;
+/* (时钟芯片相关标志已移除 —— 时钟芯片将由独立例程处理) */

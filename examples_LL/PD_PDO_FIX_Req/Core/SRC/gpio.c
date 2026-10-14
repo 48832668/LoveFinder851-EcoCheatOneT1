@@ -103,11 +103,6 @@ void Studio_GPIO_Init(void)
   GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
   LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = CLK_INT_Pin;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
   /* ★ PA0 FUSB_INT：FUSB302 的 INT_N 是【开漏 + 低有效】，
    *   所以"有中断要处理"这个物理事件就是【由高变低】= 下降沿。
    *   ⚠️ 不要配成 RISING_FALLING 或 RISING —— 那样只会在"中断被读掉、
@@ -130,21 +125,11 @@ void Studio_GPIO_Init(void)
   LL_EXTI_Init(&EXTI_InitStruct);
   LL_EXTI_SetEXTISource(LL_EXTI_CONFIG_PORTA, LL_EXTI_CONFIG_LINE1);
 
-  EXTI_InitStruct.Line = LL_EXTI_LINE_5;
-  EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
-  EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_FALLING;
-  EXTI_InitStruct.LineCommand = ENABLE;
-  LL_EXTI_Init(&EXTI_InitStruct);
-  LL_EXTI_SetEXTISource(LL_EXTI_CONFIG_PORTB, LL_EXTI_CONFIG_LINE5);
-
   NVIC_SetPriority(EXTI0_1_IRQn, 0);
   NVIC_EnableIRQ(EXTI0_1_IRQn);
 
   NVIC_SetPriority(EXTI2_3_IRQn, 0);
   NVIC_EnableIRQ(EXTI2_3_IRQn);
-
-  NVIC_SetPriority(EXTI4_15_IRQn, 0);
-  NVIC_EnableIRQ(EXTI4_15_IRQn);
 
   /* USER CODE BEGIN Studio_GPIO_Init 1 */
 

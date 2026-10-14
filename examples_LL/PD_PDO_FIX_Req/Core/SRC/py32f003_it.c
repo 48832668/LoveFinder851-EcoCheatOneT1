@@ -32,7 +32,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "py32f003_it.h"
 /* USER CODE BEGIN Includes */
-#include "irq_flags.h"   /* g_pdIrq / g_keyIrq / g_keyLevel / g_clkIrq / uwTick */
+#include "irq_flags.h"   /* g_pdIrq / g_keyIrq / g_keyLevel / uwTick */
 #include "gpio.h"        /* KEY_INT_Port / KEY_INT_Pin —— 读按键引脚电平 */
 /* USER CODE END Includes */
 
@@ -262,21 +262,8 @@ void EXTI4_15_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI4_15_IRQn 0 */
 
-  /* ---- ③ PB5 CLK_INT：时钟芯片的中断（下降沿） ----
-   *
-   * 业主明确：**本轮只保留标志，不做任何处理**。
-   * 留着它的意义：
-   *   ① 中断通路已经通了，以后要读时钟芯片，主循环直接消费 g_clkIrq 即可；
-   *   ② g_clkIrqCnt 能反映时钟芯片到底有没有在拉 INT（排查硬件/极性用）。
-   *
-   * ⚠️ 同样只置标志、不碰 I2C —— 理由见 EXTI0_1_IRQHandler 上面那段。 */
-  if (LL_EXTI_IsActiveFlag(LL_EXTI_LINE_5) != 0U)
-  {
-    LL_EXTI_ClearFlag(LL_EXTI_LINE_5);
-
-    g_clkIrq = 1u;
-    g_clkIrqCnt++;
-  }
+  /* 时钟芯片 (PB5/EXTI5) 的中断已移除 —— 时钟芯片将由独立例程处理。
+   * 本工程不再配置 PB5 的 GPIO 和 EXTI5，此 handler 保留为空框架。 */
 
   /* USER CODE END EXTI4_15_IRQn 0 */
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */

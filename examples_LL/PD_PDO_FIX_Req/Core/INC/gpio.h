@@ -59,8 +59,6 @@ extern "C" {
 #define LCD_CS_Port GPIOA
 #define LCD_EN_Pin LL_GPIO_PIN_12
 #define LCD_EN_Port GPIOA
-#define CLK_INT_Pin LL_GPIO_PIN_5
-#define CLK_INT_Port GPIOB
 
 void Studio_GPIO_Init(void);
 

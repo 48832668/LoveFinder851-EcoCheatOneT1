@@ -9,9 +9,9 @@
   *  源端发完 Source_Capabilities 之后，只等 tSenderResponse（PD 规范 24~30ms）
   *  就要收到 SINK 的 Request，超时直接发 Hard Reset 并把 VBUS 拉低重启。
   *
-  *  所以"从事件发生到主循环开始处理"的延迟必须远小于 24ms。为此三条 EXTI
-  *  都只做一件事：**置一个标志**。真正的处理（读 I2C、组 RDO、发 Request、
-  *  去抖、画屏）全部留在主循环 —— 原因见 py32f003_it.c 里那段说明。
+ *  所以"从事件发生到主循环开始处理"的延迟必须远小于 24ms。为此两条 EXTI
+ *  都只做一件事：**置一个标志**。真正的处理（读 I2C、组 RDO、发 Request、
+ *  去抖、画屏）全部留在主循环 —— 原因见 py32f003_it.c 里那段说明。
   *
   *  ⚠️ ISR 里**绝对不要**调 BSP_GetTick() 之外的任何 BSP/库函数，
   *     尤其不要碰 I2C / SPI。
@@ -63,15 +63,6 @@ extern volatile uint8_t  g_keyLevel;
 /* 边沿总数（**含抖动**）。诊断用：一次干净按键应该贡献 2（按下 + 松开），
  * 如果这个数远大于 2 倍按键次数，说明去抖窗口需要调大。 */
 extern volatile uint32_t g_keyIrqCnt;
-
-/*============================================================================
- * ③ 时钟芯片 INT   -> PB5 / EXTI5 / **下降沿**
- *============================================================================*/
-/* 本轮**只保留标志，不做任何处理**（业主：时钟芯片先不管）。
- * 留着它的意义：① 引脚中断通路已经通了，以后要用直接消费 g_clkIrq 即可；
- *              ② g_clkIrqCnt 能反映时钟芯片到底有没有在拉 INT。 */
-extern volatile uint8_t  g_clkIrq;
-extern volatile uint32_t g_clkIrqCnt;
 
 #ifdef __cplusplus
 }
