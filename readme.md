@@ -1,3 +1,9 @@
+> **邀请你使用 LoveFinderZone 来更加畅爽地探索我的所有项目！**
+> 这是我的个人开源项目分享平台：
+> - 仓库地址 1（GitHub）：https://github.com/48832668/LoveFinderZone
+> - 仓库地址 2（Gitee）：https://gitee.com/LoveFinderSeriesOfficial/LoveFinderZone
+
+
 前排感谢：https://oshwhub.com/xivn1987/daplink
 这个工程促成了板载调试器部分的开发，对板载调试器部分实现感兴趣的请直接访问这个工程并为他点击点赞收藏，谢谢
 ![opensourceDAPLINK.png](img/opensourceDAPLINK.png)
@@ -8,6 +14,25 @@
 ![正面.jpg](img/正面.jpg)
 
 ![背面.jpg](img/背面.jpg)
+
+## LoveFinder 信息
+
+| 字段 | 值 |
+|---|---|
+| 编号 | 851 |
+| 额外代号 | EcoCheatOneT1 |
+| 所属系列 | EcoCheatOne |
+| 产品线 | eco-cheat-one |
+| 类型 | hardware+software |
+| 简介 | PY32 经济型多功能开发板：PD 诱骗 + 电压电流表 + 数字闹钟 + 板载 DAPLink。 |
+| 状态 | 已发布 |
+| 登记日期 | 2026-10-30 |
+
+**更新概要**
+
+- 2026-10-30 登记进内容仓：补 `## LoveFinder 信息` 板块；静态图复制进来，
+  4 张演示动图（单个最大 7.6 MB）留在项目仓库不搬
+- 2026-09-23 初次发布（项目仓库里的原始记录）
 
 ## 更新日志
 2026.9.23 初次发布
